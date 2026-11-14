@@ -85,7 +85,6 @@ export async function create(
 }
 
 
-// Operação específica para cadastrar atendimentos antigos
 export async function createAntigo(
   req: CreateHistoricoVisitaRequest,
   res: Response,

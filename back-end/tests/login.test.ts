@@ -59,19 +59,16 @@ describe("normalizarLogin", () => {
 });
 
 
-// Verificação de tipos (feita pelo "tsc"): esta função nunca é executada.
-// Sem a normalização, o TypeScript recusa o login no repository.
 function verificacaoDeTipos(): void {
-  // @ts-expect-error: texto cru não é um LoginNormalizado
+  // @ts-expect-error
   usuarioRepository.findByLogin("jose");
 
-  // @ts-expect-error: texto cru não é um LoginNormalizado
+  // @ts-expect-error
   usuarioRepository.findCredenciaisByLogin("jose");
 
-  // @ts-expect-error: o login do DTO exige o tipo normalizado
+  // @ts-expect-error
   usuarioRepository.create({ nome: "x", login: "jose", senha_hash: "x", perfil: "DONO" });
 
-  // Com a normalização, compila:
   usuarioRepository.findByLogin(normalizarLogin("Jose"));
 }
 

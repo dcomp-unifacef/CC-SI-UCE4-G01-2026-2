@@ -10,12 +10,8 @@ import { normalizarLogin } from "../src/utils/login.ts";
 import { Perfil } from "../generated/prisma/client.ts";
 
 
-// Estes testes usam o banco de desenvolvimento, SOMENTE com dados fictícios
-// criados por eles mesmos. A limpeza remove apenas os ids criados nesta
-// execução (nunca por prefixo ou filtro genérico), sessões primeiro e
-// usuários depois. Nenhum teste faz limpeza geral das sessões do banco.
 const RODADA = randomBytes(4).toString("hex");
-const HASH_FICTICIO = `hash-ficticio-${RODADA}`; // não é senha nem hash real
+const HASH_FICTICIO = `hash-ficticio-${RODADA}`;
 const HORA = 60 * 60 * 1000;
 const DIA = 24 * HORA;
 
@@ -39,8 +35,6 @@ async function criarUsuario() {
 }
 
 
-// O token em texto existe só nesta função (memória) e nunca é usado: o
-// banco recebe apenas o hash.
 async function criarSessao(usuarioId: number, expiraEm = new Date(Date.now() + 8 * HORA)) {
   const { hash } = gerarToken();
   const sessao = await repository.create({ token_hash: hash, usuario_id: usuarioId, expira_em: expiraEm });
@@ -50,8 +44,6 @@ async function criarSessao(usuarioId: number, expiraEm = new Date(Date.now() + 8
 }
 
 
-// Sessão que já nasce expirada: criada direto, com criada_em no passado
-// (o CHECK exige expira_em > criada_em).
 async function criarSessaoExpiradaEm(usuarioId: number, expiraEm: Date) {
   const { hash } = gerarToken();
   const sessao = await prisma.sessao.create({
@@ -73,8 +65,6 @@ async function existe(id: number): Promise<boolean> {
 }
 
 
-// Confere (sem imprimir valores) que o resultado não contém o hash do
-// token, a senha nem o hash da senha do usuário.
 function semSegredos(resultado: unknown, hashDoToken?: string): boolean {
   const texto = JSON.stringify(resultado);
 
@@ -90,8 +80,6 @@ function erroPrisma(codigo: string) {
 }
 
 
-// Única forma de limpar sessões expiradas neste arquivo: o usuarioId é
-// obrigatório, então nenhum teste consegue fazer uma limpeza geral.
 function limparExpiradasDoUsuario(antes: Date, usuarioId: number) {
   return repository.deleteExpiradas(antes, usuarioId);
 }
@@ -145,7 +133,6 @@ describe("Sessao: criação e restrições", () => {
   it("o CHECK recusa expira_em anterior ou igual a criada_em", async () => {
     const u = await criarUsuario();
 
-    // anterior ao momento da criação (criada_em usa o relógio do banco)
     const passado = gerarToken().hash;
 
     await assert.rejects(
@@ -153,7 +140,6 @@ describe("Sessao: criação e restrições", () => {
     );
     assert.equal(await prisma.sessao.count({ where: { token_hash: passado } }), 0);
 
-    // igual a criada_em
     const instante = new Date(Date.now() - DIA);
     const igual = gerarToken().hash;
 
@@ -164,8 +150,6 @@ describe("Sessao: criação e restrições", () => {
   });
 
   it("a exclusão de um usuário exclui as sessões dele (CASCADE do banco)", async () => {
-    // A regra da aplicação é desativar usuários; este teste só documenta o
-    // comportamento do banco, com um usuário criado pelo próprio teste.
     const u = await criarUsuario();
     const a = await criarSessao(u.id);
     const b = await criarSessao(u.id);
@@ -224,7 +208,6 @@ describe("Sessao: último uso e revogação", () => {
     assert.equal(ra?.revogada_em?.getTime(), quando.getTime());
     assert.equal(rb?.revogada_em, null);
 
-    // revogar de novo não altera nada nem a data
     assert.equal((await repository.revoke(a.sessao.id, depois)).count, 0);
     assert.equal((await prisma.sessao.findUnique({ where: { id: a.sessao.id } }))?.revogada_em?.getTime(), quando.getTime());
   });
@@ -262,18 +245,16 @@ describe("Sessao: limpeza de expiradas (somente registros fictícios do teste)",
     const u = await criarUsuario();
     const outro = await criarUsuario();
 
-    // Corte fixo: 30 dias antes de agora. "Expirada" é estritamente anterior ao corte.
     const corte = new Date(Date.now() - 30 * DIA);
 
-    const expiradaAntes = await criarSessaoExpiradaEm(u.id, new Date(corte.getTime() - 1000)); // removida
-    const noCorte = await criarSessaoExpiradaEm(u.id, new Date(corte.getTime())); // mantida (não é anterior)
-    const recente = await criarSessaoExpiradaEm(u.id, new Date(corte.getTime() + DIA)); // mantida (expirou há menos de 30 dias)
-    const ativa = await criarSessao(u.id); // mantida
-    const revogada = await criarSessao(u.id); // mantida (ainda não expirou)
+    const expiradaAntes = await criarSessaoExpiradaEm(u.id, new Date(corte.getTime() - 1000));
+    const noCorte = await criarSessaoExpiradaEm(u.id, new Date(corte.getTime()));
+    const recente = await criarSessaoExpiradaEm(u.id, new Date(corte.getTime() + DIA));
+    const ativa = await criarSessao(u.id);
+    const revogada = await criarSessao(u.id);
     await repository.revoke(revogada.sessao.id, new Date());
-    const doOutro = await criarSessaoExpiradaEm(outro.id, new Date(corte.getTime() - DIA)); // de outro usuário: mantida
+    const doOutro = await criarSessaoExpiradaEm(outro.id, new Date(corte.getTime() - DIA));
 
-    // conferência prévia (sem apagar nada)
     assert.equal(await repository.countExpiradas(corte, u.id), 1);
     assert.equal(await repository.countExpiradas(corte, outro.id), 1);
 
@@ -287,7 +268,6 @@ describe("Sessao: limpeza de expiradas (somente registros fictícios do teste)",
     assert.equal(await existe(revogada.sessao.id), true);
     assert.equal(await existe(doOutro.id), true, "a sessão expirada de outro usuário não pode ser afetada");
 
-    // segunda execução: nada mais a remover
     assert.equal((await limparExpiradasDoUsuario(corte, u.id)).count, 0);
     assert.equal(await repository.countExpiradas(corte, u.id), 0);
   });

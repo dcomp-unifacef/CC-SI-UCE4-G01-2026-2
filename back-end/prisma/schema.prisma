@@ -22,25 +22,23 @@ model Paciente {
   nome            String   // Nome completo do paciente
   cpf             String   @unique // CPF (somente números)
   data_nascimento DateTime @db.Date // Data de nascimento (obrigatória)
-  logradouro      String?  // Rua/avenida do endereço (opcional)
-  numero          String?  // Número da casa (opcional)
+  logradouro      String?  // Rua/avenida do endereço
+  numero          String?  // Número da casa
   complemento     String?  // Complemento do endereço (opcional)
-  bairro          String?  // Bairro (opcional)
-  municipio       String?  // Município (opcional)
-  uf              String?  @db.Char(2) // UF (opcional)
-  telefone        String   // Telefone/celular (pode ser compartilhado)
-  email           String?  // E-mail (opcional, pode ser compartilhado)
+  bairro          String?  // Bairro
+  municipio       String?  // Município
+  uf              String?  @db.Char(2) // UF
+  telefone        String   // Telefone/celular
+  email           String?  // E-mail (opcional)
   ativo           Boolean  @default(true) // Desativação lógica (US15)
   visitas         HistoricoVisita[] // Lista virtual: visitas do paciente (lado 1)
 }
 
-// Profissional que realiza o atendimento. Entidade separada de Usuario:
-// permite representar dentistas antigos ou externos, sem login.
 model Dentista {
-  id    Int     @id @default(autoincrement()) // Chave primária, autoincremental
-  nome  String  // Nome do dentista
-  ativo Boolean @default(true) // Desativação lógica
-  visitas HistoricoVisita[] // Lista virtual: visitas atendidas pelo dentista (lado 1)
+  id    Int     @id @default(autoincrement())
+  nome  String
+  ativo Boolean @default(true)
+  visitas HistoricoVisita[]
 }
 
 model HistoricoVisita {
@@ -48,10 +46,10 @@ model HistoricoVisita {
   data_visita     DateTime @db.Date // Data em que o atendimento foi realizado
   procedimento    String   // Procedimento realizado
   observacoes     String?  // Observações clínicas (opcional)
-  registro_antigo Boolean  @default(false) // Atendimento antigo lançado manualmente (auditoria)
+  registro_antigo Boolean  @default(false)
   paciente_id     Int      // Chave estrangeira (obrigatória)
   paciente        Paciente @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
-  dentista_id     Int      // Dentista responsável pelo atendimento (obrigatório)
+  dentista_id     Int      // Dentista responsável pelo atendimento
   dentista        Dentista @relation(fields: [dentista_id], references: [id], onDelete: Restrict)
 }
 
@@ -62,43 +60,39 @@ enum Perfil {
 }
 
 model Usuario {
-  id                Int       @id @default(autoincrement()) // Chave primária, autoincremental
-  nome              String    // Nome da pessoa
-  login             String    @unique // Usuário de acesso (US01); gravado normalizado
-  senha_hash        String    // Hash com sal (US03); a senha nunca é guardada
-  perfil            Perfil    // Secretária, dentista ou dono
-  ativo             Boolean   @default(true) // Desativação lógica: usuários não são excluídos
-  tentativas_falhas Int       @default(0) // Bloqueio após 3 tentativas (US01)
-  bloqueado_ate     DateTime? @db.Timestamptz(3) // Bloqueio de 1 minuto (US01)
+  id                Int       @id @default(autoincrement())
+  nome              String
+  login             String    @unique
+  senha_hash        String
+  perfil            Perfil
+  ativo             Boolean   @default(true)
+  tentativas_falhas Int       @default(0)
+  bloqueado_ate     DateTime? @db.Timestamptz(3)
   criado_em         DateTime  @default(now()) @db.Timestamptz(3)
   atualizado_em     DateTime  @updatedAt @db.Timestamptz(3)
-  sessoes           Sessao[]  // Lista virtual: sessões do usuário (lado 1)
-  configuracoes     Configuracao[] // Lista virtual: alterações de configuração feitas pelo usuário (lado 1)
+  sessoes           Sessao[]
+  configuracoes     Configuracao[]
 }
 
-// Configuração do sistema, em linha única (id = 1, garantido por CHECK na
-// migration). Os valores são em minutos e o dono pode alterá-los.
 model Configuracao {
-  id                       Int      @id @default(1) // Sempre 1 (linha única)
-  sessao_inatividade_min   Int      @default(30)  // Inatividade máxima da sessão
-  sessao_duracao_max_min   Int      @default(480) // Duração absoluta máxima da sessão (8 h)
-  consulta_duracao_max_min Int      @default(240) // Duração máxima de uma consulta
+  id                       Int      @id @default(1)
+  sessao_inatividade_min   Int      @default(30)
+  sessao_duracao_max_min   Int      @default(480)
+  consulta_duracao_max_min Int      @default(240)
   atualizado_em            DateTime @updatedAt @db.Timestamptz(3)
-  atualizado_por_id        Int?     // Quem alterou por último (vazio na linha inicial)
+  atualizado_por_id        Int?
   atualizado_por           Usuario? @relation(fields: [atualizado_por_id], references: [id], onDelete: Restrict)
 }
 
-// Sessão no servidor (cookie HttpOnly). O token só existe no cookie;
-// no banco fica apenas o hash dele.
 model Sessao {
-  id            Int       @id @default(autoincrement()) // Chave primária, autoincremental
-  token_hash    String    @unique // SHA-256 (hex) do token; o token em si nunca é gravado
-  usuario_id    Int       // Dono da sessão
+  id            Int       @id @default(autoincrement())
+  token_hash    String    @unique
+  usuario_id    Int
   usuario       Usuario   @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
   criada_em     DateTime  @default(now()) @db.Timestamptz(3)
-  expira_em     DateTime  @db.Timestamptz(3) // Fim absoluto da sessão
-  ultimo_uso_em DateTime  @default(now()) @db.Timestamptz(3) // Expiração por inatividade
-  revogada_em   DateTime? @db.Timestamptz(3) // Preenchida no logout ou na revogação
+  expira_em     DateTime  @db.Timestamptz(3)
+  ultimo_uso_em DateTime  @default(now()) @db.Timestamptz(3)
+  revogada_em   DateTime? @db.Timestamptz(3)
 
   @@index([usuario_id])
 }

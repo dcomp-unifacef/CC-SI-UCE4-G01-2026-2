@@ -4,8 +4,6 @@ import type { CreateSessaoDto }
   from "../dto/sessao/createSessaoDto.ts";
 
 
-// O hash do token não sai nas respostas, e o usuário vem apenas com os
-// campos mínimos (nunca senha_hash).
 const semHashDoToken = { token_hash: true } as const;
 
 const usuarioMinimo = {
@@ -21,8 +19,6 @@ export function create(data: CreateSessaoDto) {
 }
 
 
-// A validade da sessão (expirada, inativa, revogada, usuário ativo) é regra
-// de negócio: fica no service, na etapa da API.
 export function findByTokenHash(token_hash: string) {
   return prisma.sessao.findUnique({
     where: { token_hash },
@@ -32,7 +28,6 @@ export function findByTokenHash(token_hash: string) {
 }
 
 
-// Registra o último uso da sessão. Devolve quantas sessões foram atualizadas.
 export function touch(id: number, quando: Date) {
   return prisma.sessao.updateMany({
     where: { id },
@@ -41,7 +36,6 @@ export function touch(id: number, quando: Date) {
 }
 
 
-// Revoga a sessão. Se já estava revogada, não altera nada (count = 0).
 export function revoke(id: number, quando: Date) {
   return prisma.sessao.updateMany({
     where: { id, revogada_em: null },
@@ -50,7 +44,6 @@ export function revoke(id: number, quando: Date) {
 }
 
 
-// Revoga todas as sessões ainda não revogadas do usuário.
 export function revokeAllByUsuario(usuarioId: number, quando: Date) {
   return prisma.sessao.updateMany({
     where: { usuario_id: usuarioId, revogada_em: null },
@@ -59,8 +52,6 @@ export function revokeAllByUsuario(usuarioId: number, quando: Date) {
 }
 
 
-// "Expirada" = expira_em estritamente anterior a "antes".
-// O usuarioId opcional limita o alcance (os testes SEMPRE o informam).
 export function countExpiradas(antes: Date, usuarioId?: number) {
   return prisma.sessao.count({
     where: {
@@ -71,9 +62,6 @@ export function countExpiradas(antes: Date, usuarioId?: number) {
 }
 
 
-// Exclui as sessões expiradas antes de uma data. Devolve quantas foram
-// excluídas. Sem usuarioId, vale para toda a tabela (uso da limpeza real,
-// na etapa da API); com usuarioId, só para as sessões daquele usuário.
 export function deleteExpiradas(antes: Date, usuarioId?: number) {
   return prisma.sessao.deleteMany({
     where: {

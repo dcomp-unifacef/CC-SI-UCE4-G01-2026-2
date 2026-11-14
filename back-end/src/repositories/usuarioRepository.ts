@@ -8,9 +8,10 @@ import type { UpdateUsuarioDto }
 
 import type { LoginNormalizado } from "../utils/login.ts";
 
+import { Perfil } from "../../generated/prisma/client.ts";
+import { BLOQUEIO_DONOS } from "../database/bloqueios.ts";
 
-// O hash da senha não sai nas consultas comuns. Somente
-// findCredenciaisByLogin() o devolve, para o login (etapa posterior).
+
 const semSenha = { senha_hash: true } as const;
 
 
@@ -32,7 +33,6 @@ export function findById(id: number) {
 }
 
 
-// O login chega já normalizado (ver src/utils/login.ts)
 export function findByLogin(login: LoginNormalizado) {
   return prisma.usuario.findUnique({
     where: { login },
@@ -41,8 +41,6 @@ export function findByLogin(login: LoginNormalizado) {
 }
 
 
-// Única consulta que devolve senha_hash: destinada à verificação do login.
-// O resultado nunca deve ser enviado ao cliente nem registrado em log.
 export function findCredenciaisByLogin(login: LoginNormalizado) {
   return prisma.usuario.findUnique({
     where: { login },
@@ -79,4 +77,24 @@ export function update(
 }
 
 
-// Não há remove: usuários são desativados (ativo = false), não excluídos.
+export function contarUsuarios() {
+  return prisma.usuario.count();
+}
+
+
+export function criarPrimeiroDono(data: Omit<CreateUsuarioDto, "perfil">) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT 1 AS bloqueado FROM (SELECT pg_advisory_xact_lock(${BLOQUEIO_DONOS}::bigint)) AS trava`;
+
+    if (await tx.usuario.count() > 0) {
+      return null;
+    }
+
+    return tx.usuario.create({
+      data: { ...data, perfil: Perfil.DONO },
+      omit: semSenha,
+    });
+  });
+}
+
+

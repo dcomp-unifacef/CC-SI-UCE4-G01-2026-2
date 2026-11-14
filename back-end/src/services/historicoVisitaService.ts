@@ -21,9 +21,6 @@ import {
 } from "../utils/validators.ts";
 
 
-// Só se registra visita de paciente existente e ativo (regra de negócio).
-// Reaproveita pacienteService.findById(), que lança "Paciente não encontrado.".
-// Atendimentos antigos podem ser lançados para pacientes arquivados.
 async function validarPaciente(
   pacienteId: number,
   permitirArquivado: boolean
@@ -38,8 +35,6 @@ async function validarPaciente(
 }
 
 
-// O dentista deve existir e, para visitas novas, estar ativo.
-// Dentistas antigos ou externos (inativos) servem a atendimentos antigos.
 async function validarDentista(
   dentistaId: number,
   permitirInativo: boolean
@@ -54,7 +49,6 @@ async function validarDentista(
 }
 
 
-// A visita registra um atendimento que já aconteceu: a data não pode ser futura
 function validarDataVisita(valor: unknown): Date {
   const data = converterData(valor);
 
@@ -111,7 +105,6 @@ async function criar(
     paciente_id,
   };
 
-  // O atendimento antigo fica identificado para auditoria
   return repository.create(antigo ? { ...nova, registro_antigo: true } : nova);
 }
 
@@ -123,8 +116,6 @@ export async function create(
 }
 
 
-// Operação específica para cadastrar atendimentos antigos (fichas físicas),
-// inclusive de pacientes arquivados.
 export async function createAntigo(
   data: CreateHistoricoVisitaDto
 ): Promise<HistoricoVisita> {

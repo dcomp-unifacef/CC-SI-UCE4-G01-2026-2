@@ -3,10 +3,9 @@ import { BadRequestError } from '../errors/BadRequestError.ts'
 
 export type Corpo = Record<string, unknown>
 
-const ID_MAXIMO = 2147483647 // limite do tipo INTEGER do PostgreSQL
+const ID_MAXIMO = 2147483647
 
 
-// Garante que o corpo da requisição é um objeto JSON
 export function exigirCorpo(data: unknown): Corpo {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     throw new BadRequestError('Corpo da requisição inválido.')
@@ -16,7 +15,6 @@ export function exigirCorpo(data: unknown): Corpo {
 }
 
 
-// O id chega como string pelo Express e é convertido para number no controller
 export function validarId(id: number): void {
   if (!Number.isInteger(id) || id <= 0 || id > ID_MAXIMO) {
     throw new BadRequestError('Identificador inválido.')
@@ -45,8 +43,6 @@ export function textoObrigatorio(corpo: Corpo, campo: string): string {
 }
 
 
-// Campo de texto que pode ficar sem valor: ausente (undefined),
-// nulo ou vazio (null) ou texto.
 export function textoOpcional(corpo: Corpo, campo: string): string | null | undefined {
   const valor = corpo[campo]
 
@@ -96,8 +92,6 @@ export function booleanoOpcional(corpo: Corpo, campo: string): boolean | undefin
 }
 
 
-// Converte um texto ISO ('2026-09-15' ou '2026-09-15T00:00:00.000Z') em uma
-// data (sem horário). Devolve null se o valor não for uma data válida.
 export function converterData(valor: unknown): Date | null {
   if (typeof valor !== 'string') return null
 
@@ -108,8 +102,6 @@ export function converterData(valor: unknown): Date | null {
   const mes = Number(partes[2])
   const dia = Number(partes[3])
 
-  // O JavaScript "corrige" datas impossíveis (31/02 vira 03/03);
-  // aqui elas são recusadas.
   const data = new Date(Date.UTC(ano, mes - 1, dia))
 
   if (
@@ -120,14 +112,12 @@ export function converterData(valor: unknown): Date | null {
     return null
   }
 
-  // Se vier horário (ISO completo), ele também deve ser válido
   if (valor.length > 10 && Number.isNaN(new Date(valor).getTime())) return null
 
   return data
 }
 
 
-// Data de hoje no fuso do consultório, no formato AAAA-MM-DD
 export function hoje(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
 }
@@ -143,7 +133,6 @@ export function emailValido(email: string): boolean {
 }
 
 
-// Códigos de erro do Prisma que as regras de negócio tratam como conflito
 export function erroPrisma(error: unknown, codigo: string): boolean {
   return typeof error === 'object' && error !== null && (error as { code?: string }).code === codigo
 }

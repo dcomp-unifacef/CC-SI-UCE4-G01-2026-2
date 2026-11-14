@@ -1,0 +1,1 @@
+export const BLOQUEIO_DONOS = 7301001

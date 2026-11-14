@@ -28,7 +28,6 @@ const MENSAGEM_COM_VISITAS =
   "Paciente possui histórico de visitas e não pode ser excluído. Desative o cadastro.";
 
 
-// A UF, se enviada, deve ter 2 letras e é gravada em maiúsculas
 function lerUf(corpo: Corpo): string | null | undefined {
   const uf = textoOpcional(corpo, "uf");
 
@@ -42,7 +41,6 @@ function lerUf(corpo: Corpo): string | null | undefined {
 }
 
 
-// O e-mail é opcional e pode ser compartilhado; se informado, deve ter formato válido
 function lerEmail(corpo: Corpo): string | null | undefined {
   const email = textoOpcional(corpo, "email");
 
@@ -54,7 +52,6 @@ function lerEmail(corpo: Corpo): string | null | undefined {
 }
 
 
-// A data de nascimento é obrigatória, deve ser válida e não pode ser futura
 function lerDataNascimento(valor: unknown): Date {
   const data = converterData(valor);
 
@@ -99,14 +96,12 @@ export async function create(
     throw new BadRequestError('O campo "data_nascimento" é obrigatório.');
   }
 
-  // Remove a pontuação do CPF e valida os dígitos verificadores (US04)
   const cpf = normalizeCpf(cpfInformado);
 
   if (!isValidCpf(cpf)) {
     throw new BadRequestError("CPF inválido.");
   }
 
-  // O CPF é a chave contra duplicatas
   if (await repository.findByCpf(cpf)) {
     throw new ConflictError(MENSAGEM_CPF_DUPLICADO);
   }
@@ -129,7 +124,6 @@ export async function create(
     return await repository.create(novo);
   }
   catch (error) {
-    // Dois cadastros simultâneos com o mesmo CPF: o banco recusa o segundo
     if (erroPrisma(error, "P2002")) {
       throw new ConflictError(MENSAGEM_CPF_DUPLICADO);
     }
@@ -147,7 +141,6 @@ export async function update(
 
   const corpo = exigirCorpo(data);
 
-  // O CPF não pode ser alterado (US06)
   if ("cpf" in corpo) {
     throw new BadRequestError("O CPF não pode ser alterado.");
   }
@@ -179,7 +172,6 @@ export async function remove(
 ): Promise<Paciente> {
   await findById(id);
 
-  // Não há cascata: o histórico clínico deve ser preservado (US15)
   if (await repository.countVisitas(id) > 0) {
     throw new ConflictError(MENSAGEM_COM_VISITAS);
   }
@@ -188,7 +180,6 @@ export async function remove(
     return await repository.remove(id);
   }
   catch (error) {
-    // A chave estrangeira (ON DELETE RESTRICT) também impede a exclusão
     if (erroPrisma(error, "P2003")) {
       throw new ConflictError(MENSAGEM_COM_VISITAS);
     }

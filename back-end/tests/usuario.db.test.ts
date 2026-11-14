@@ -10,11 +10,8 @@ import type { CreateUsuarioDto } from "../src/dto/usuario/createUsuarioDto.ts";
 import { Perfil } from "../generated/prisma/client.ts";
 
 
-// Estes testes usam o banco de desenvolvimento, SOMENTE com dados fictícios
-// criados por eles mesmos. A limpeza remove apenas os ids criados nesta
-// execução (nunca por prefixo ou por filtro genérico).
 const RODADA = randomBytes(4).toString("hex");
-const HASH_FICTICIO = `hash-ficticio-${RODADA}`; // não é senha nem hash real
+const HASH_FICTICIO = `hash-ficticio-${RODADA}`;
 
 const idsCriados: number[] = [];
 let contador = 0;
@@ -40,7 +37,6 @@ async function criar(extra: Partial<CreateUsuarioDto> = {}) {
 }
 
 
-// Confere (sem imprimir valores) que o resultado não contém a senha nem o hash
 function semHash(resultado: unknown): boolean {
   const texto = JSON.stringify(resultado);
 

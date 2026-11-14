@@ -7,8 +7,6 @@ import type { UpdateHistoricoVisitaDto }
   from "../dto/historicoVisita/updateHistoricoVisitaDto.ts";
 
 
-// Cada visita vem com o paciente embutido (o select limita os campos
-// ao necessário) e com o dentista responsável.
 const include = {
   paciente: {
     select: { id: true, nome: true, telefone: true },
@@ -37,7 +35,6 @@ export function findById(id: number) {
 }
 
 
-// registro_antigo identifica o atendimento antigo lançado manualmente
 export function create(
   data: CreateHistoricoVisitaDto & { registro_antigo?: boolean }
 ) {

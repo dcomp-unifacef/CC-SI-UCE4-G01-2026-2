@@ -14,8 +14,6 @@ import { errorHandler } from './middlewares/errorHandler.ts'
 
 const app = express()
 
-// CORS: somente as origens (URLs de front-end) listadas em ALLOWED_ORIGINS
-// são aceitas. Sem a variável, valem as origens padrão de desenvolvimento.
 const allowedOrigins = (
   process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173'
 )
@@ -27,8 +25,6 @@ app.use(cors({
   origin: allowedOrigins,
 }))
 
-// O log registra o caminho sem a query string, que poderia conter dados
-// pessoais (por exemplo, um CPF em uma busca).
 logger.token('caminho', (req) => (req as express.Request).originalUrl.split('?')[0])
 app.use(logger(':method :caminho :status :response-time ms - :res[content-length]'))
 app.use(json())

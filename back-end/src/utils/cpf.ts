@@ -1,16 +1,13 @@
-// Remove a pontuação do CPF, mantendo somente os números
 export function normalizeCpf(value: string): string {
   return value.replace(/\D/g, '')
 }
 
 
-// Valida o CPF pelos dígitos verificadores (US04)
 export function isValidCpf(value: string): boolean {
   const cpf = normalizeCpf(value)
 
   if (cpf.length !== 11) return false
 
-  // CPFs com todos os dígitos iguais passam no cálculo, mas são inválidos
   if (/^(\d)\1{10}$/.test(cpf)) return false
 
   const digito = (base: string, pesoInicial: number): number => {

@@ -72,7 +72,6 @@ export async function remove(
 ): Promise<Dentista> {
   await findById(id);
 
-  // O histórico clínico deve ser preservado
   if (await repository.countVisitas(id) > 0) {
     throw new ConflictError(MENSAGEM_COM_VISITAS);
   }

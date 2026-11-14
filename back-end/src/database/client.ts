@@ -31,8 +31,6 @@ const prisma = new PrismaClient({
 
 // Estas são as instruções que mostrarão no terminal todas
 // as instruções SQL geradas pelo Prisma.
-// Os valores (params) NÃO são exibidos: eles podem conter dados
-// pessoais ou clínicos. Mostramos apenas a quantidade deles.
 if (process.env.NODE_ENV !== "production") {
   prisma.$on("query", (e) => {
     let quantidade = 0;
@@ -52,9 +50,6 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 
-// Os erros do Prisma NÃO são impressos na íntegra: a mensagem inclui os dados
-// enviados na operação (por exemplo senha_hash, CPF e nomes). O terminal
-// recebe apenas a origem do erro; o detalhe é tratado pelo errorHandler.
 prisma.$on("error", (e) => {
   console.error("Erro do Prisma (detalhes omitidos). Origem: " + (e.target ?? "desconhecida"));
 });
