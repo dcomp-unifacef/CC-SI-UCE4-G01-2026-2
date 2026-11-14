@@ -3,17 +3,29 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { randomBytes, randomInt } from "node:crypto";
 
 import app from "../src/app.ts";
 import { prisma } from "../src/database/client.ts";
 
 
-// Estes testes usam o banco de desenvolvimento, com dados FICTÍCIOS marcados
-// com o prefixo "[TESTE]", que são removidos no início e no fim da execução.
+// Estes testes usam o banco de desenvolvimento, SOMENTE com dados fictícios
+// criados por eles mesmos. O prefixo "[TESTE]" serve apenas para identificar
+// os dados a olho nu: NUNCA é usado para apagar. A limpeza remove somente os
+// ids registrados pela execução atual (ver "criados" e limparCriados()).
 const MARCA = "[TESTE]";
+const RODADA = randomBytes(4).toString("hex");
 
 let server: Server;
 let base = "";
+
+
+// Ids dos registros criados por ESTA execução (preenchidos pelo chamar())
+const criados = {
+  visitas: new Set<number>(),
+  pacientes: new Set<number>(),
+  dentistas: new Set<number>(),
+};
 
 
 type Resposta = { status: number; body: any; headers: Headers };
@@ -32,18 +44,33 @@ async function chamar(
   });
 
   const texto = await resposta.text();
+  const corpoResposta = texto ? JSON.parse(texto) : null;
+
+  // Registra o id de tudo o que ESTA execução criou, para a limpeza
+  if (metodo === "POST" && resposta.status === 201 && typeof corpoResposta?.id === "number") {
+    if (caminho === "/pacientes") criados.pacientes.add(corpoResposta.id);
+    else if (caminho === "/dentistas") criados.dentistas.add(corpoResposta.id);
+    else if (caminho === "/historico-visitas" || caminho === "/historico-visitas/antigos") criados.visitas.add(corpoResposta.id);
+  }
 
   return {
     status: resposta.status,
-    body: texto ? JSON.parse(texto) : null,
+    body: corpoResposta,
     headers: resposta.headers,
   };
 }
 
 
+// Semente aleatória por execução: os CPFs fictícios mudam a cada execução,
+// para não colidir com dados de outras execuções ou de outras pessoas.
+const SEMENTE_CPF = randomInt(0, 800000);
+
+
 // Gera um CPF válido e fictício a partir de um número (base de 9 dígitos)
 function cpfFicticio(n: number): string {
-  const base9 = String(100000000 + n * 7919).slice(0, 9);
+  let numero = 100000000 + ((SEMENTE_CPF * 1000 + n) * 7919) % 800000000;
+  while (/^(\d)\1{8}$/.test(String(numero))) numero += 1; // evita 9 dígitos iguais
+  const base9 = String(numero);
   const digito = (txt: string, pesoInicial: number) => {
     let soma = 0;
     let peso = pesoInicial;
@@ -86,15 +113,25 @@ async function criarDentista(nome = `${MARCA} Dra. Helena`) {
 }
 
 
-async function limpar() {
-  await prisma.historicoVisita.deleteMany({ where: { procedimento: { startsWith: MARCA } } });
-  await prisma.paciente.deleteMany({ where: { nome: { startsWith: MARCA } } });
-  await prisma.dentista.deleteMany({ where: { nome: { startsWith: MARCA } } });
+// Remove SOMENTE os registros cujos ids foram criados por esta execução,
+// na ordem das chaves estrangeiras: visitas, depois pacientes, depois dentistas.
+// Não há filtro por nome nem por prefixo.
+async function limparCriados() {
+  const visitas = [...criados.visitas];
+  const pacientes = [...criados.pacientes];
+  const dentistas = [...criados.dentistas];
+
+  if (visitas.length > 0) await prisma.historicoVisita.deleteMany({ where: { id: { in: visitas } } });
+  if (pacientes.length > 0) await prisma.paciente.deleteMany({ where: { id: { in: pacientes } } });
+  if (dentistas.length > 0) await prisma.dentista.deleteMany({ where: { id: { in: dentistas } } });
+
+  criados.visitas.clear();
+  criados.pacientes.clear();
+  criados.dentistas.clear();
 }
 
 
 before(async () => {
-  await limpar();
   server = createServer(app);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -102,7 +139,7 @@ before(async () => {
 
 
 after(async () => {
-  await limpar();
+  await limparCriados();
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await prisma.$disconnect();
 });
@@ -110,21 +147,24 @@ after(async () => {
 
 describe("Paciente", () => {
   it("cria paciente: CPF com pontuação vira só números e a UF vira maiúscula (201)", async () => {
+    const puro = cpfFicticio(7001);
+    const pontuado = `${puro.slice(0, 3)}.${puro.slice(3, 6)}.${puro.slice(6, 9)}-${puro.slice(9)}`;
     const dados = novoPaciente({
-      cpf: "529.982.247-25", logradouro: "Rua das Acácias", numero: "145",
+      cpf: pontuado, logradouro: "Rua das Acácias", numero: "145",
       bairro: "Jardim América", municipio: "Franca", uf: "sp",
     });
     const r = await chamar("POST", "/pacientes", dados);
 
     assert.equal(r.status, 201, JSON.stringify(r.body));
-    assert.equal(r.body.cpf, "52998224725");
+    assert.equal(r.body.cpf, puro);
     assert.equal(r.body.uf, "SP");
     assert.equal(r.body.ativo, true);
     assert.ok(r.body.id);
   });
 
   it("recusa o mesmo CPF uma segunda vez (409)", async () => {
-    const r = await chamar("POST", "/pacientes", novoPaciente({ cpf: "52998224725" }));
+    const existente = await criarPaciente();
+    const r = await chamar("POST", "/pacientes", novoPaciente({ cpf: existente.cpf }));
 
     assert.equal(r.status, 409);
     assert.equal(r.body.message, "Já existe um paciente cadastrado com este CPF.");
@@ -449,5 +489,60 @@ describe("CORS", () => {
 
     const outra = await chamar("GET", "/pacientes", undefined, { Origin: "http://site-estranho.example" });
     assert.equal(outra.headers.get("access-control-allow-origin"), null);
+  });
+});
+
+
+// Deve ser o ÚLTIMO bloco: chama limparCriados() no meio da execução.
+describe("Limpeza dos testes", () => {
+  it("remove somente os registros criados por esta execução e preserva os de terceiros", async () => {
+    // "Terceiros": criados direto no banco, fora do registro desta execução,
+    // com o MESMO prefixo "[TESTE]". Uma limpeza por prefixo os apagaria.
+    const dentistaTerceiro = await prisma.dentista.create({ data: { nome: `${MARCA} Terceiro ${RODADA}` } });
+    const pacienteTerceiro = await prisma.paciente.create({
+      data: { nome: `${MARCA} Terceiro ${RODADA}`, cpf: cpfFicticio(9001), data_nascimento: new Date("1990-01-01"), telefone: "16990000000" },
+    });
+    const visitaTerceira = await prisma.historicoVisita.create({
+      data: {
+        data_visita: new Date("2020-01-01"), procedimento: `${MARCA} Terceiro ${RODADA}`,
+        paciente_id: pacienteTerceiro.id, dentista_id: dentistaTerceiro.id,
+      },
+    });
+
+    try {
+      // Registros desta execução: paciente, dentista e visita criados pela API
+      const p = await criarPaciente();
+      const d = await criarDentista();
+      const v = await chamar("POST", "/historico-visitas", {
+        data_visita: "2026-09-15T00:00:00.000Z", procedimento: `${MARCA} Limpeza`,
+        dentista_id: d.id, paciente_id: p.id,
+      });
+      assert.equal(v.status, 201, JSON.stringify(v.body));
+
+      assert.ok(criados.pacientes.has(p.id) && criados.dentistas.has(d.id) && criados.visitas.has(v.body.id));
+      assert.ok(!criados.pacientes.has(pacienteTerceiro.id) && !criados.dentistas.has(dentistaTerceiro.id) && !criados.visitas.has(visitaTerceira.id));
+
+      const idsVisitas = [...criados.visitas];
+      const idsPacientes = [...criados.pacientes];
+      const idsDentistas = [...criados.dentistas];
+
+      await limparCriados();
+
+      // Tudo o que esta execução criou foi removido...
+      assert.equal(await prisma.historicoVisita.count({ where: { id: { in: idsVisitas } } }), 0);
+      assert.equal(await prisma.paciente.count({ where: { id: { in: idsPacientes } } }), 0);
+      assert.equal(await prisma.dentista.count({ where: { id: { in: idsDentistas } } }), 0);
+
+      // ...e os terceiros, com o mesmo prefixo, continuam existindo
+      assert.equal(await prisma.historicoVisita.count({ where: { id: visitaTerceira.id } }), 1);
+      assert.equal(await prisma.paciente.count({ where: { id: pacienteTerceiro.id } }), 1);
+      assert.equal(await prisma.dentista.count({ where: { id: dentistaTerceiro.id } }), 1);
+    }
+    finally {
+      // Os terceiros são removidos pelos seus próprios ids, na ordem das chaves estrangeiras
+      await prisma.historicoVisita.deleteMany({ where: { id: visitaTerceira.id } });
+      await prisma.paciente.deleteMany({ where: { id: pacienteTerceiro.id } });
+      await prisma.dentista.deleteMany({ where: { id: dentistaTerceiro.id } });
+    }
   });
 });
