@@ -9,8 +9,10 @@ import usersRouter from './routes/users'
 import pacientesRouter from './routes/pacientes.ts'
 import dentistasRouter from './routes/dentistas.ts'
 import historicoVisitasRouter from './routes/historicoVisitas.ts'
+import sessoesRouter from './routes/sessoes.ts'
 
 import { errorHandler } from './middlewares/errorHandler.ts'
+import { verificarOrigem } from './middlewares/verificarOrigem.ts'
 
 const app = express()
 
@@ -23,6 +25,7 @@ const allowedOrigins = (
 
 app.use(cors({
   origin: allowedOrigins,
+  credentials: true,
 }))
 
 logger.token('caminho', (req) => (req as express.Request).originalUrl.split('?')[0])
@@ -35,6 +38,8 @@ app.use(cookieParser())
 
 app.use('/', indexRouter)
 app.use('/users', usersRouter)
+
+app.use('/sessoes', verificarOrigem(allowedOrigins), sessoesRouter)
 
 app.use('/pacientes', pacientesRouter)
 app.use('/dentistas', dentistasRouter)
