@@ -32,6 +32,7 @@ model Paciente {
   email           String?  // E-mail (opcional)
   ativo           Boolean  @default(true) // Desativação lógica (US15)
   visitas         HistoricoVisita[] // Lista virtual: visitas do paciente (lado 1)
+  consultas       Consulta[]
 }
 
 model Dentista {
@@ -39,6 +40,7 @@ model Dentista {
   nome  String
   ativo Boolean @default(true)
   visitas HistoricoVisita[]
+  consultas Consulta[]
 }
 
 model HistoricoVisita {
@@ -72,6 +74,7 @@ model Usuario {
   atualizado_em     DateTime  @updatedAt @db.Timestamptz(3)
   sessoes           Sessao[]
   configuracoes     Configuracao[]
+  historicosConsulta HistoricoConsulta[]
 }
 
 model Configuracao {
@@ -95,4 +98,56 @@ model Sessao {
   revogada_em   DateTime? @db.Timestamptz(3)
 
   @@index([usuario_id])
+}
+
+enum StatusConsulta {
+  AGENDADA
+  CONFIRMADA
+  REALIZADA
+  FALTOU
+  CANCELADA
+}
+
+model Consulta {
+  id            Int            @id @default(autoincrement())
+  paciente_id   Int
+  paciente      Paciente       @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
+  dentista_id   Int
+  dentista      Dentista       @relation(fields: [dentista_id], references: [id], onDelete: Restrict)
+  inicio_em     DateTime       @db.Timestamptz(3)
+  duracao_min   Int
+  fim_em        DateTime       @db.Timestamptz(3)
+  status        StatusConsulta @default(AGENDADA)
+  encaixe       Boolean        @default(false)
+  criada_em     DateTime       @default(now()) @db.Timestamptz(3)
+  atualizada_em DateTime       @updatedAt @db.Timestamptz(3)
+  historico     HistoricoConsulta[]
+
+  @@index([dentista_id, inicio_em])
+  @@index([paciente_id])
+}
+
+enum TipoHistoricoConsulta {
+  CRIACAO
+  MUDANCA_DE_STATUS
+  REAGENDAMENTO
+}
+
+model HistoricoConsulta {
+  id                   Int                   @id @default(autoincrement())
+  consulta_id          Int
+  consulta             Consulta              @relation(fields: [consulta_id], references: [id], onDelete: Restrict)
+  tipo                 TipoHistoricoConsulta
+  status_anterior      StatusConsulta?
+  status_novo          StatusConsulta
+  inicio_anterior      DateTime?             @db.Timestamptz(3)
+  inicio_novo          DateTime?             @db.Timestamptz(3)
+  duracao_anterior_min Int?
+  duracao_nova_min     Int?
+  motivo               String?
+  usuario_id           Int
+  usuario              Usuario               @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  registrado_em        DateTime              @default(now()) @db.Timestamptz(3)
+
+  @@index([consulta_id])
 }
