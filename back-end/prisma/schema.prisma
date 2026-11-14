@@ -1,0 +1,56 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/*
+ O nome de um model no Prisma:
+ * deve iniciar com letra maiúscula
+ * deve estar no singular
+*/
+model Paciente {
+  id              Int      @id @default(autoincrement()) // Chave primária, autoincremental
+  nome            String   // Nome completo do paciente
+  cpf             String   @unique // CPF (somente números)
+  data_nascimento DateTime @db.Date // Data de nascimento (obrigatória)
+  logradouro      String?  // Rua/avenida do endereço (opcional)
+  numero          String?  // Número da casa (opcional)
+  complemento     String?  // Complemento do endereço (opcional)
+  bairro          String?  // Bairro (opcional)
+  municipio       String?  // Município (opcional)
+  uf              String?  @db.Char(2) // UF (opcional)
+  telefone        String   // Telefone/celular (pode ser compartilhado)
+  email           String?  // E-mail (opcional, pode ser compartilhado)
+  ativo           Boolean  @default(true) // Desativação lógica (US15)
+  visitas         HistoricoVisita[] // Lista virtual: visitas do paciente (lado 1)
+}
+
+// Profissional que realiza o atendimento. Entidade separada de Usuario:
+// permite representar dentistas antigos ou externos, sem login.
+model Dentista {
+  id    Int     @id @default(autoincrement()) // Chave primária, autoincremental
+  nome  String  // Nome do dentista
+  ativo Boolean @default(true) // Desativação lógica
+  visitas HistoricoVisita[] // Lista virtual: visitas atendidas pelo dentista (lado 1)
+}
+
+model HistoricoVisita {
+  id              Int      @id @default(autoincrement()) // Chave primária, autoincremental
+  data_visita     DateTime @db.Date // Data em que o atendimento foi realizado
+  procedimento    String   // Procedimento realizado
+  observacoes     String?  // Observações clínicas (opcional)
+  registro_antigo Boolean  @default(false) // Atendimento antigo lançado manualmente (auditoria)
+  paciente_id     Int      // Chave estrangeira (obrigatória)
+  paciente        Paciente @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
+  dentista_id     Int      // Dentista responsável pelo atendimento (obrigatório)
+  dentista        Dentista @relation(fields: [dentista_id], references: [id], onDelete: Restrict)
+}
