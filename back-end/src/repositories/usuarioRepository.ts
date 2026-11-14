@@ -98,20 +98,35 @@ export function criarPrimeiroDono(data: Omit<CreateUsuarioDto, "perfil">) {
 }
 
 
-export function registrarFalhaDeLogin(id: number) {
-  return prisma.usuario.update({
-    where: { id },
-    data: { tentativas_falhas: { increment: 1 } },
-    select: { tentativas_falhas: true },
+export function liberarBloqueioVencido(id: number, agora: Date) {
+  return prisma.usuario.updateMany({
+    where: { id, bloqueado_ate: { lte: agora } },
+    data: { tentativas_falhas: 0, bloqueado_ate: null },
   });
 }
 
 
-export function bloquearLogin(id: number, ate: Date) {
-  return prisma.usuario.update({
-    where: { id },
-    data: { tentativas_falhas: 0, bloqueado_ate: ate },
-    select: { id: true },
+export async function reservarTentativaDeLogin(
+  id: number,
+  maximo: number
+): Promise<boolean> {
+  const { count } = await prisma.usuario.updateMany({
+    where: { id, bloqueado_ate: null, tentativas_falhas: { lt: maximo } },
+    data: { tentativas_falhas: { increment: 1 } },
+  });
+
+  return count === 1;
+}
+
+
+export function bloquearSeTentativasEsgotadas(
+  id: number,
+  maximo: number,
+  ate: Date
+) {
+  return prisma.usuario.updateMany({
+    where: { id, bloqueado_ate: null, tentativas_falhas: { gte: maximo } },
+    data: { bloqueado_ate: ate },
   });
 }
 

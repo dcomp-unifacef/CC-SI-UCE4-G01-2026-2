@@ -61,15 +61,40 @@ function paraUsuarioAutenticado(usuario: UsuarioAutenticadoDto): UsuarioAutentic
 }
 
 
-async function registrarFalha(id: number): Promise<void> {
-  const { tentativas_falhas } = await usuarioRepository.registrarFalhaDeLogin(id);
+interface CredenciaisDeLogin {
+  id: number;
+  tentativas_falhas: number;
+  bloqueado_ate: Date | null;
+}
 
-  if (tentativas_falhas >= TENTATIVAS_MAXIMAS) {
-    await usuarioRepository.bloquearLogin(
-      id,
+
+async function reservarTentativa(
+  credenciais: CredenciaisDeLogin,
+  agora: Date
+): Promise<boolean> {
+  const bloqueioVencido =
+    credenciais.bloqueado_ate !== null && credenciais.bloqueado_ate <= agora;
+
+  if (bloqueioVencido) {
+    await usuarioRepository.liberarBloqueioVencido(credenciais.id, agora);
+  }
+
+  const tentativasAntes = bloqueioVencido ? 0 : credenciais.tentativas_falhas;
+
+  const reservada = await usuarioRepository.reservarTentativaDeLogin(
+    credenciais.id,
+    TENTATIVAS_MAXIMAS
+  );
+
+  if (!reservada || tentativasAntes + 1 >= TENTATIVAS_MAXIMAS) {
+    await usuarioRepository.bloquearSeTentativasEsgotadas(
+      credenciais.id,
+      TENTATIVAS_MAXIMAS,
       new Date(Date.now() + BLOQUEIO_EM_MS)
     );
   }
+
+  return reservada;
 }
 
 
@@ -85,26 +110,23 @@ export async function login(data: LoginDto): Promise<SessaoIniciada> {
   const agora = new Date();
   const credenciais = await usuarioRepository.findCredenciaisByLogin(loginNormalizado);
 
+  if (!credenciais || !credenciais.ativo) {
+    await verificarSenha(senha, await hashFalso);
+    throw new UnauthorizedError(MENSAGEM_LOGIN);
+  }
+
+  const reservada = await reservarTentativa(credenciais, agora);
+
   const senhaConfere = await verificarSenha(
     senha,
-    credenciais?.senha_hash ?? (await hashFalso)
+    reservada ? credenciais.senha_hash : await hashFalso
   );
 
-  const bloqueadoAte = credenciais?.bloqueado_ate ?? null;
-  const bloqueado = bloqueadoAte !== null && bloqueadoAte > agora;
-
-  if (!credenciais || !credenciais.ativo || bloqueado) {
+  if (!reservada || !senhaConfere) {
     throw new UnauthorizedError(MENSAGEM_LOGIN);
   }
 
-  if (!senhaConfere) {
-    await registrarFalha(credenciais.id);
-    throw new UnauthorizedError(MENSAGEM_LOGIN);
-  }
-
-  if (credenciais.tentativas_falhas > 0 || credenciais.bloqueado_ate !== null) {
-    await usuarioRepository.zerarFalhasDeLogin(credenciais.id);
-  }
+  await usuarioRepository.zerarFalhasDeLogin(credenciais.id);
 
   const configuracao = await configuracaoRepository.find();
 
