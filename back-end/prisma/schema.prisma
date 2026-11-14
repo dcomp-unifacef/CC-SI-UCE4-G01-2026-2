@@ -73,6 +73,19 @@ model Usuario {
   criado_em         DateTime  @default(now()) @db.Timestamptz(3)
   atualizado_em     DateTime  @updatedAt @db.Timestamptz(3)
   sessoes           Sessao[]  // Lista virtual: sessões do usuário (lado 1)
+  configuracoes     Configuracao[] // Lista virtual: alterações de configuração feitas pelo usuário (lado 1)
+}
+
+// Configuração do sistema, em linha única (id = 1, garantido por CHECK na
+// migration). Os valores são em minutos e o dono pode alterá-los.
+model Configuracao {
+  id                       Int      @id @default(1) // Sempre 1 (linha única)
+  sessao_inatividade_min   Int      @default(30)  // Inatividade máxima da sessão
+  sessao_duracao_max_min   Int      @default(480) // Duração absoluta máxima da sessão (8 h)
+  consulta_duracao_max_min Int      @default(240) // Duração máxima de uma consulta
+  atualizado_em            DateTime @updatedAt @db.Timestamptz(3)
+  atualizado_por_id        Int?     // Quem alterou por último (vazio na linha inicial)
+  atualizado_por           Usuario? @relation(fields: [atualizado_por_id], references: [id], onDelete: Restrict)
 }
 
 // Sessão no servidor (cookie HttpOnly). O token só existe no cookie;
