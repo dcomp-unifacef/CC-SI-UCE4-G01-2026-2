@@ -72,4 +72,20 @@ model Usuario {
   bloqueado_ate     DateTime? @db.Timestamptz(3) // Bloqueio de 1 minuto (US01)
   criado_em         DateTime  @default(now()) @db.Timestamptz(3)
   atualizado_em     DateTime  @updatedAt @db.Timestamptz(3)
+  sessoes           Sessao[]  // Lista virtual: sessões do usuário (lado 1)
+}
+
+// Sessão no servidor (cookie HttpOnly). O token só existe no cookie;
+// no banco fica apenas o hash dele.
+model Sessao {
+  id            Int       @id @default(autoincrement()) // Chave primária, autoincremental
+  token_hash    String    @unique // SHA-256 (hex) do token; o token em si nunca é gravado
+  usuario_id    Int       // Dono da sessão
+  usuario       Usuario   @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  criada_em     DateTime  @default(now()) @db.Timestamptz(3)
+  expira_em     DateTime  @db.Timestamptz(3) // Fim absoluto da sessão
+  ultimo_uso_em DateTime  @default(now()) @db.Timestamptz(3) // Expiração por inatividade
+  revogada_em   DateTime? @db.Timestamptz(3) // Preenchida no logout ou na revogação
+
+  @@index([usuario_id])
 }
