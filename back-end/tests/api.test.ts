@@ -7,13 +7,20 @@ import { randomBytes, randomInt } from "node:crypto";
 
 import app from "../src/app.ts";
 import { prisma } from "../src/database/client.ts";
+import { gerarHashSenha } from "../src/utils/senha.ts";
+import { normalizarLogin } from "../src/utils/login.ts";
+import { Perfil } from "../generated/prisma/client.ts";
 
 
 const MARCA = "[TESTE]";
 const RODADA = randomBytes(4).toString("hex");
+const ORIGEM = "http://localhost:5173";
+const SENHA_TESTE = `senha-ficticia-api-${RODADA}`;
 
 let server: Server;
 let base = "";
+let cookie = "";
+let usuarioTesteId = 0;
 
 
 const criados = {
@@ -32,9 +39,14 @@ async function chamar(
   corpo?: unknown,
   cabecalhos: Record<string, string> = {}
 ): Promise<Resposta> {
+  const padrao: Record<string, string> = {};
+  if (cookie) padrao.Cookie = cookie;
+  if (metodo !== "GET") padrao.Origin = ORIGEM;
+  const todos = { ...padrao, ...cabecalhos };
+
   const resposta = await fetch(base + caminho, {
     method: metodo,
-    headers: corpo === undefined ? cabecalhos : { "Content-Type": "application/json", ...cabecalhos },
+    headers: corpo === undefined ? todos : { "Content-Type": "application/json", ...todos },
     body: corpo === undefined ? undefined : typeof corpo === "string" ? corpo : JSON.stringify(corpo),
   });
 
@@ -123,11 +135,34 @@ before(async () => {
   server = createServer(app);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  const usuario = await prisma.usuario.create({
+    data: {
+      nome: `${MARCA} Dono ${RODADA}`,
+      login: normalizarLogin(`teste.api.${RODADA}`),
+      senha_hash: await gerarHashSenha(SENHA_TESTE),
+      perfil: Perfil.DONO,
+    },
+  });
+  usuarioTesteId = usuario.id;
+
+  const entrada = await fetch(base + "/sessoes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: ORIGEM },
+    body: JSON.stringify({ login: usuario.login, senha: SENHA_TESTE }),
+  });
+  await entrada.text();
+  assert.equal(entrada.status, 201);
+  cookie = entrada.headers.getSetCookie()[0]!.split(";")[0]!;
 });
 
 
 after(async () => {
   await limparCriados();
+  if (usuarioTesteId > 0) {
+    await prisma.sessao.deleteMany({ where: { usuario_id: usuarioTesteId } });
+    await prisma.usuario.deleteMany({ where: { id: usuarioTesteId } });
+  }
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await prisma.$disconnect();
 });

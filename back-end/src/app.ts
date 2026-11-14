@@ -11,8 +11,13 @@ import dentistasRouter from './routes/dentistas.ts'
 import historicoVisitasRouter from './routes/historicoVisitas.ts'
 import sessoesRouter from './routes/sessoes.ts'
 import usuariosRouter from './routes/usuarios.ts'
+import configuracoesRouter from './routes/configuracoes.ts'
 
+import { Perfil } from '../generated/prisma/client.ts'
+
+import { autenticar } from './middlewares/autenticar.ts'
 import { errorHandler } from './middlewares/errorHandler.ts'
+import { exigirPerfil } from './middlewares/exigirPerfil.ts'
 import { verificarOrigem } from './middlewares/verificarOrigem.ts'
 
 const app = express()
@@ -43,9 +48,16 @@ app.use('/users', usersRouter)
 app.use('/sessoes', verificarOrigem(allowedOrigins), sessoesRouter)
 app.use('/usuarios', verificarOrigem(allowedOrigins), usuariosRouter)
 
-app.use('/pacientes', pacientesRouter)
-app.use('/dentistas', dentistasRouter)
-app.use('/historico-visitas', historicoVisitasRouter)
+const protegidoSomenteDono = [
+  verificarOrigem(allowedOrigins),
+  autenticar,
+  exigirPerfil(Perfil.DONO),
+]
+
+app.use('/pacientes', protegidoSomenteDono, pacientesRouter)
+app.use('/dentistas', protegidoSomenteDono, dentistasRouter)
+app.use('/historico-visitas', protegidoSomenteDono, historicoVisitasRouter)
+app.use('/configuracoes', protegidoSomenteDono, configuracoesRouter)
 
 /*********** TRATAMENTO DE ERROS (sempre por último) ***********/
 
