@@ -22,7 +22,7 @@ const prisma = new PrismaClient({
 
   log: [
     { emit: "event", level: "query" },
-    { emit: "stdout", level: "error" },
+    { emit: "event", level: "error" },
     { emit: "stdout", level: "info" },
     { emit: "stdout", level: "warn" },
   ],
@@ -50,6 +50,14 @@ if (process.env.NODE_ENV !== "production") {
     console.log("Duration: " + e.duration + "ms");
   });
 }
+
+
+// Os erros do Prisma NÃO são impressos na íntegra: a mensagem inclui os dados
+// enviados na operação (por exemplo senha_hash, CPF e nomes). O terminal
+// recebe apenas a origem do erro; o detalhe é tratado pelo errorHandler.
+prisma.$on("error", (e) => {
+  console.error("Erro do Prisma (detalhes omitidos). Origem: " + (e.target ?? "desconhecida"));
+});
 
 
 export { prisma };

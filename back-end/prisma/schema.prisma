@@ -54,3 +54,22 @@ model HistoricoVisita {
   dentista_id     Int      // Dentista responsável pelo atendimento (obrigatório)
   dentista        Dentista @relation(fields: [dentista_id], references: [id], onDelete: Restrict)
 }
+
+enum Perfil {
+  SECRETARIA
+  DENTISTA
+  DONO
+}
+
+model Usuario {
+  id                Int       @id @default(autoincrement()) // Chave primária, autoincremental
+  nome              String    // Nome da pessoa
+  login             String    @unique // Usuário de acesso (US01); gravado normalizado
+  senha_hash        String    // Hash com sal (US03); a senha nunca é guardada
+  perfil            Perfil    // Secretária, dentista ou dono
+  ativo             Boolean   @default(true) // Desativação lógica: usuários não são excluídos
+  tentativas_falhas Int       @default(0) // Bloqueio após 3 tentativas (US01)
+  bloqueado_ate     DateTime? @db.Timestamptz(3) // Bloqueio de 1 minuto (US01)
+  criado_em         DateTime  @default(now()) @db.Timestamptz(3)
+  atualizado_em     DateTime  @updatedAt @db.Timestamptz(3)
+}
