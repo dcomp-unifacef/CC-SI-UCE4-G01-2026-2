@@ -6,9 +6,13 @@ import type { CreateUsuarioDto }
 import type { UpdateUsuarioDto }
   from "../dto/usuario/updateUsuarioDto.ts";
 
+import type { CreateSessaoDto }
+  from "../dto/sessao/createSessaoDto.ts";
+
 import type { LoginNormalizado } from "../utils/login.ts";
 
 import { Perfil } from "../../generated/prisma/client.ts";
+import type { Usuario } from "../../generated/prisma/client.ts";
 import { BLOQUEIO_DONOS } from "../database/bloqueios.ts";
 
 
@@ -131,11 +135,115 @@ export function bloquearSeTentativasEsgotadas(
 }
 
 
-export function zerarFalhasDeLogin(id: number) {
-  return prisma.usuario.update({
-    where: { id },
-    data: { tentativas_falhas: 0, bloqueado_ate: null },
-    select: { id: true },
+export function concluirLogin(
+  id: number,
+  senhaHashConferido: string,
+  sessao: Omit<CreateSessaoDto, "usuario_id">
+) {
+  return prisma.$transaction(async (tx) => {
+    const { count } = await tx.usuario.updateMany({
+      where: { id, ativo: true, senha_hash: senhaHashConferido },
+      data: { tentativas_falhas: 0, bloqueado_ate: null },
+    });
+
+    if (count !== 1) {
+      return null;
+    }
+
+    return tx.sessao.create({
+      data: { ...sessao, usuario_id: id },
+      omit: { token_hash: true },
+    });
+  });
+}
+
+
+export type ResultadoDaAtualizacao =
+  | { situacao: "atualizado"; usuario: Omit<Usuario, "senha_hash"> }
+  | { situacao: "nao_encontrado" }
+  | { situacao: "ultimo_dono" };
+
+
+export function atualizarRespeitandoUltimoDono(
+  id: number,
+  data: { nome?: string; perfil?: Perfil; ativo?: boolean },
+  quando: Date
+) {
+  return prisma.$transaction(async (tx): Promise<ResultadoDaAtualizacao> => {
+    await tx.$queryRaw`SELECT 1 AS bloqueado FROM (SELECT pg_advisory_xact_lock(${BLOQUEIO_DONOS}::bigint)) AS trava`;
+
+    const atual = await tx.usuario.findUnique({
+      where: { id },
+      select: { perfil: true, ativo: true },
+    });
+
+    if (!atual) {
+      return { situacao: "nao_encontrado" };
+    }
+
+    const deixaDeSerDonoAtivo =
+      atual.perfil === Perfil.DONO &&
+      atual.ativo &&
+      (data.ativo === false ||
+        (data.perfil !== undefined && data.perfil !== Perfil.DONO));
+
+    if (deixaDeSerDonoAtivo) {
+      const outrosDonos = await tx.usuario.count({
+        where: { perfil: Perfil.DONO, ativo: true, id: { not: id } },
+      });
+
+      if (outrosDonos === 0) {
+        return { situacao: "ultimo_dono" };
+      }
+    }
+
+    const reativando = data.ativo === true && !atual.ativo;
+
+    const usuario = await tx.usuario.update({
+      where: { id },
+      data: {
+        ...data,
+        ...(reativando ? { tentativas_falhas: 0, bloqueado_ate: null } : {}),
+      },
+      omit: semSenha,
+    });
+
+    if (data.ativo === false) {
+      await tx.sessao.updateMany({
+        where: { usuario_id: id, revogada_em: null },
+        data: { revogada_em: quando },
+      });
+    }
+
+    return { situacao: "atualizado", usuario };
+  });
+}
+
+
+export function alterarSenhaERevogarSessoes(
+  id: number,
+  senha_hash: string,
+  quando: Date,
+  senhaHashEsperado?: string
+) {
+  return prisma.$transaction(async (tx) => {
+    const { count } = await tx.usuario.updateMany({
+      where: senhaHashEsperado === undefined
+        ? { id }
+        : { id, senha_hash: senhaHashEsperado },
+      data: { senha_hash, tentativas_falhas: 0, bloqueado_ate: null },
+    });
+
+    if (count !== 1) {
+      return false;
+    }
+
+    await tx.sessao.updateMany({
+      where: { usuario_id: id, revogada_em: null },
+      data: { revogada_em: quando },
+    });
+
+    return true;
   });
 }
 

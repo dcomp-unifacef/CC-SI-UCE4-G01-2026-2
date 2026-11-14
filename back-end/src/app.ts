@@ -10,6 +10,7 @@ import pacientesRouter from './routes/pacientes.ts'
 import dentistasRouter from './routes/dentistas.ts'
 import historicoVisitasRouter from './routes/historicoVisitas.ts'
 import sessoesRouter from './routes/sessoes.ts'
+import usuariosRouter from './routes/usuarios.ts'
 
 import { errorHandler } from './middlewares/errorHandler.ts'
 import { verificarOrigem } from './middlewares/verificarOrigem.ts'
@@ -40,6 +41,7 @@ app.use('/', indexRouter)
 app.use('/users', usersRouter)
 
 app.use('/sessoes', verificarOrigem(allowedOrigins), sessoesRouter)
+app.use('/usuarios', verificarOrigem(allowedOrigins), usuariosRouter)
 
 app.use('/pacientes', pacientesRouter)
 app.use('/dentistas', dentistasRouter)

@@ -126,8 +126,6 @@ export async function login(data: LoginDto): Promise<SessaoIniciada> {
     throw new UnauthorizedError(MENSAGEM_LOGIN);
   }
 
-  await usuarioRepository.zerarFalhasDeLogin(credenciais.id);
-
   const configuracao = await configuracaoRepository.find();
 
   if (!configuracao) {
@@ -144,11 +142,15 @@ export async function login(data: LoginDto): Promise<SessaoIniciada> {
   const expira_em = new Date(Date.now() + duracaoEmMs);
   const { token, hash } = gerarToken();
 
-  await sessaoRepository.create({
-    token_hash: hash,
-    usuario_id: usuario.id,
-    expira_em,
-  });
+  const sessaoCriada = await usuarioRepository.concluirLogin(
+    usuario.id,
+    credenciais.senha_hash,
+    { token_hash: hash, expira_em }
+  );
+
+  if (sessaoCriada === null) {
+    throw new UnauthorizedError(MENSAGEM_LOGIN);
+  }
 
   return {
     token,
@@ -156,6 +158,30 @@ export async function login(data: LoginDto): Promise<SessaoIniciada> {
     expira_em,
     usuario: paraUsuarioAutenticado(usuario),
   };
+}
+
+
+export async function conferirSenhaAtual(
+  loginDoUsuario: string,
+  senha: string
+): Promise<string | null> {
+  const credenciais = await usuarioRepository.findCredenciaisByLogin(
+    normalizarLogin(loginDoUsuario)
+  );
+
+  if (!credenciais || !credenciais.ativo) {
+    await verificarSenha(senha, await hashFalso);
+    return null;
+  }
+
+  const reservada = await reservarTentativa(credenciais, new Date());
+
+  const senhaConfere = await verificarSenha(
+    senha,
+    reservada ? credenciais.senha_hash : await hashFalso
+  );
+
+  return reservada && senhaConfere ? credenciais.senha_hash : null;
 }
 
 
