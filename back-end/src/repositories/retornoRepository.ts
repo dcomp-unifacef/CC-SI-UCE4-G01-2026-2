@@ -41,6 +41,7 @@ export type ResultadoDoRetorno =
   | { situacao: "nao_encontrado" }
   | { situacao: "visita_nao_encontrada" }
   | { situacao: "ja_existe_aberto" }
+  | { situacao: "paciente_inativo" }
   | { situacao: "nao_aberto" }
   | { situacao: "sem_mudanca" }
   | { situacao: "alterada_por_outra_operacao" };
@@ -127,6 +128,15 @@ export async function criar(
         return { situacao: "visita_nao_encontrada" };
       }
 
+      const pacienteAtivo = await tx.paciente.updateMany({
+        where: { id: visita.paciente_id, ativo: true },
+        data: { ativo: true },
+      });
+
+      if (pacienteAtivo.count !== 1) {
+        return { situacao: "paciente_inativo" };
+      }
+
       const trava = await tx.historicoVisita.updateMany({
         where: {
           id: data.visita_origem_id,
@@ -193,7 +203,7 @@ export function corrigirData(
   return prisma.$transaction(async (tx): Promise<ResultadoDoRetorno> => {
     const atual = await tx.retorno.findUnique({
       where: { id },
-      select: { situacao: true, data_prevista: true },
+      select: { situacao: true, data_prevista: true, paciente_id: true },
     });
 
     if (!atual) {
@@ -202,6 +212,15 @@ export function corrigirData(
 
     if (atual.situacao !== SituacaoRetorno.ABERTO) {
       return { situacao: "nao_aberto" };
+    }
+
+    const pacienteAtivo = await tx.paciente.updateMany({
+      where: { id: atual.paciente_id, ativo: true },
+      data: { ativo: true },
+    });
+
+    if (pacienteAtivo.count !== 1) {
+      return { situacao: "paciente_inativo" };
     }
 
     const data_prevista = soData(novo.data_prevista);

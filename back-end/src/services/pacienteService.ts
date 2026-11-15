@@ -9,6 +9,7 @@ import { NotFoundError } from "../errors/NotFoundError.ts";
 import { BadRequestError } from "../errors/BadRequestError.ts";
 import { ConflictError } from "../errors/ConflictError.ts";
 
+import { interpretarBusca, semAcentos } from "../utils/busca.ts";
 import { isValidCpf, normalizeCpf } from "../utils/cpf.ts";
 import {
   booleanoOpcional,
@@ -68,8 +69,62 @@ function lerDataNascimento(valor: unknown): Date {
 }
 
 
-export async function findAll(): Promise<Paciente[]> {
-  return repository.findAll();
+const LIMITE_DA_BUSCA = 50;
+
+
+export async function findAll(
+  query: Record<string, unknown> = {}
+): Promise<Paciente[]> {
+  const busca = query.busca;
+  const incluir = query.incluir_desativados;
+
+  if (busca === undefined && incluir === undefined) {
+    return repository.findAll();
+  }
+
+  if (busca === undefined) {
+    throw new BadRequestError(
+      'O parâmetro "incluir_desativados" exige o parâmetro "busca".'
+    );
+  }
+
+  if (typeof busca !== "string" || busca.trim() === "") {
+    throw new BadRequestError('O parâmetro "busca" é inválido.');
+  }
+
+  if (incluir !== undefined && incluir !== "true" && incluir !== "false") {
+    throw new BadRequestError(
+      'O parâmetro "incluir_desativados" deve ser "true" ou "false".'
+    );
+  }
+
+  const incluirDesativados = incluir === "true";
+  const interpretada = interpretarBusca(busca);
+
+  if (interpretada.tipo === "cpf") {
+    return repository.findByCpfPrefixo(
+      interpretada.prefixo,
+      incluirDesativados,
+      LIMITE_DA_BUSCA
+    );
+  }
+
+  const candidatos = await repository.findIdsENomes(incluirDesativados);
+
+  const ids = candidatos
+    .filter((candidato) => {
+      const nome = semAcentos(candidato.nome);
+
+      return interpretada.termos.every((termo) => nome.includes(termo));
+    })
+    .slice(0, LIMITE_DA_BUSCA)
+    .map((candidato) => candidato.id);
+
+  if (ids.length === 0) {
+    return [];
+  }
+
+  return repository.findByIds(ids);
 }
 
 

@@ -37,7 +37,9 @@ export async function retrieveAll(
   next: NextFunction
 ): Promise<void> {
   try {
-    const pacientes = await service.findAll();
+    const pacientes = await service.findAll(
+      req.query as Record<string, unknown>
+    );
 
 
     res.json(pacientes);

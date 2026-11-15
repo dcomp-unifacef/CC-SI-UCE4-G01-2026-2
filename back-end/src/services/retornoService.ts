@@ -2,7 +2,7 @@ import * as repository from "../repositories/retornoRepository.ts";
 import * as historicoRepository from "../repositories/historicoRetornoRepository.ts";
 import * as visitaRepository from "../repositories/historicoVisitaRepository.ts";
 
-import { Perfil } from "../../generated/prisma/client.ts";
+import { Perfil, SituacaoRetorno } from "../../generated/prisma/client.ts";
 
 import type {
   ResultadoDoRetorno,
@@ -14,14 +14,22 @@ import type { AlteracaoDataRetornoDto } from "../dto/retorno/alteracaoDataRetorn
 import type { DescarteRetornoDto } from "../dto/retorno/descarteRetornoDto.ts";
 import type { RetornoRespostaDto } from "../dto/retorno/retornoRespostaDto.ts";
 import type { HistoricoRetornoRespostaDto } from "../dto/retorno/historicoRetornoRespostaDto.ts";
+import type { AtrasoRetornoRespostaDto } from "../dto/retorno/atrasoRetornoRespostaDto.ts";
 
 import { BadRequestError } from "../errors/BadRequestError.ts";
 import { ConflictError } from "../errors/ConflictError.ts";
 import { NotFoundError } from "../errors/NotFoundError.ts";
 
-import { converterDia, formatarDia } from "../utils/datas.ts";
+import {
+  converterDia,
+  diasEntre,
+  formatarDia,
+  mesesCompletosEntre,
+  subtrairMeses,
+} from "../utils/datas.ts";
 import {
   exigirCorpo,
+  hoje,
   idDaQuery,
   inteiroObrigatorio,
   textoObrigatorio,
@@ -101,6 +109,8 @@ function tratar(
       throw new NotFoundError("Visita não encontrada.");
     case "ja_existe_aberto":
       throw new ConflictError(MENSAGEM_JA_ABERTO);
+    case "paciente_inativo":
+      throw new BadRequestError("Paciente desativado não pode ter retorno.");
     case "nao_aberto":
       throw new ConflictError(mensagemNaoAberto);
     case "sem_mudanca":
@@ -147,6 +157,70 @@ export async function findById(
   usuario: UsuarioAutenticado
 ): Promise<RetornoRespostaDto> {
   return paraResposta(await buscarOuFalhar(id), podeVerMotivos(usuario));
+}
+
+
+export async function atrasos(
+  query: Record<string, unknown>
+): Promise<AtrasoRetornoRespostaDto[]> {
+  const texto = query.meses;
+  let meses = 6;
+
+  if (texto !== undefined) {
+    if (typeof texto !== "string" || !/^(6|9|12)$/.test(texto.trim())) {
+      throw new BadRequestError('O parâmetro "meses" deve ser 6, 9 ou 12.');
+    }
+
+    meses = Number(texto.trim());
+  }
+
+  const hojeCivil = converterDia(hoje()) ?? new Date();
+  const limite = subtrairMeses(hojeCivil, meses);
+
+  const ultimas = await visitaRepository.findUltimasVisitasDePacientesAtivos();
+
+  return ultimas
+    .filter((visita) => visita.data_visita.getTime() < limite.getTime())
+    .sort(
+      (a, b) =>
+        a.data_visita.getTime() - b.data_visita.getTime() ||
+        a.paciente_id - b.paciente_id
+    )
+    .map((visita) => {
+      const aberto = visita.retornos.find(
+        (retorno) => retorno.situacao === SituacaoRetorno.ABERTO
+      );
+
+      return {
+        paciente: {
+          id: visita.paciente.id,
+          nome: visita.paciente.nome,
+          telefone: visita.paciente.telefone,
+        },
+        ultima_visita: {
+          id: visita.id,
+          data_visita: formatarDia(visita.data_visita),
+          dentista: {
+            id: visita.dentista.id,
+            nome: visita.dentista.nome,
+          },
+        },
+        dias_desde: Math.max(0, diasEntre(visita.data_visita, hojeCivil)),
+        meses_desde: mesesCompletosEntre(visita.data_visita, hojeCivil),
+        retorno: aberto
+          ? {
+              id: aberto.id,
+              data_prevista: formatarDia(aberto.data_prevista),
+              vencido: aberto.data_prevista.getTime() < hojeCivil.getTime(),
+            }
+          : null,
+        retorno_descartado:
+          aberto === undefined &&
+          visita.retornos.some(
+            (retorno) => retorno.situacao === SituacaoRetorno.DESCARTADO
+          ),
+      };
+    });
 }
 
 

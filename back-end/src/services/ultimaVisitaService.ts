@@ -10,6 +10,7 @@ import {
   diasEntre,
   formatarDia,
   mesesCompletosEntre,
+  subtrairMeses,
 } from "../utils/datas.ts";
 import { hoje, validarId } from "../utils/validators.ts";
 
@@ -32,6 +33,7 @@ export async function ultimaVisita(
       paciente_id,
       sem_historico: true,
       ultima_visita: null,
+      acima_de_6_meses: null,
       dias_desde: null,
       meses_desde: null,
     };
@@ -50,6 +52,8 @@ export async function ultimaVisita(
         nome: visita.dentista.nome,
       },
     },
+    acima_de_6_meses:
+      visita.data_visita.getTime() < subtrairMeses(referencia, 6).getTime(),
     dias_desde: Math.max(0, diasEntre(visita.data_visita, referencia)),
     meses_desde: mesesCompletosEntre(visita.data_visita, referencia),
   };

@@ -54,6 +54,25 @@ export async function index(
 }
 
 
+export async function atrasos(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const lista = await service.atrasos(
+      req.query as Record<string, unknown>
+    );
+
+
+    res.json(lista);
+  }
+  catch (error) {
+    next(error);
+  }
+}
+
+
 export async function retrieve(
   req: Request<RetornoIdParams>,
   res: Response,

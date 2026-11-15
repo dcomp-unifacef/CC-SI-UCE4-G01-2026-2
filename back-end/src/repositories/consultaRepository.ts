@@ -1,8 +1,10 @@
 import { prisma } from "../database/client.ts";
 
 import {
+  SituacaoRetorno,
   StatusConsulta,
   TipoHistoricoConsulta,
+  TipoHistoricoRetorno,
 } from "../../generated/prisma/client.ts";
 
 import type { CreateConsultaDto }
@@ -175,7 +177,8 @@ export function mudarStatus(
   novoStatus: StatusConsulta,
   usuarioId: number,
   motivo?: string | null,
-  exigirPacienteAtivo = false
+  exigirPacienteAtivo = false,
+  origensPermitidas?: StatusConsulta[]
 ) {
   return prisma.$transaction(async (tx): Promise<ResultadoDaAlteracao> => {
     const atual = await tx.consulta.findUnique({
@@ -189,6 +192,10 @@ export function mudarStatus(
 
     if (atual.status === novoStatus) {
       return { situacao: "sem_mudanca" };
+    }
+
+    if (origensPermitidas && !origensPermitidas.includes(atual.status)) {
+      return { situacao: "alterada_por_outra_operacao" };
     }
 
     if (exigirPacienteAtivo) {
@@ -229,6 +236,153 @@ export function mudarStatus(
 
     return { situacao: "alterada", consulta };
   });
+}
+
+
+export interface DadosDaRealizacao {
+  data_visita: Date;
+  procedimento: string;
+  observacoes: string | null;
+  data_prevista_retorno: Date;
+  motivo: string | null;
+}
+
+
+export type ResultadoDaRealizacao =
+  | {
+      situacao: "realizada";
+      consulta: ConsultaCompleta;
+      visita_id: number;
+      retorno_id: number;
+    }
+  | { situacao: "nao_encontrada" }
+  | { situacao: "paciente_inativo" }
+  | { situacao: "sem_mudanca" }
+  | { situacao: "alterada_por_outra_operacao" }
+  | { situacao: "visita_ja_existe" };
+
+
+function violouUnicidade(erro: unknown): boolean {
+  const e = erro as {
+    code?: string;
+    meta?: { driverAdapterError?: { cause?: { originalCode?: string } } };
+  };
+
+  return (
+    e.code === "P2002" ||
+    e.meta?.driverAdapterError?.cause?.originalCode === "23505"
+  );
+}
+
+
+export async function realizarComVisita(
+  id: number,
+  dados: DadosDaRealizacao,
+  usuarioId: number,
+  statusPermitidos: StatusConsulta[]
+): Promise<ResultadoDaRealizacao> {
+  try {
+    return await prisma.$transaction(
+      async (tx): Promise<ResultadoDaRealizacao> => {
+        const atual = await tx.consulta.findUnique({
+          where: { id },
+          select: { status: true, paciente_id: true, dentista_id: true },
+        });
+
+        if (!atual) {
+          return { situacao: "nao_encontrada" };
+        }
+
+        if (atual.status === StatusConsulta.REALIZADA) {
+          return { situacao: "sem_mudanca" };
+        }
+
+        if (!statusPermitidos.includes(atual.status)) {
+          return { situacao: "alterada_por_outra_operacao" };
+        }
+
+        const trava = await tx.paciente.updateMany({
+          where: { id: atual.paciente_id, ativo: true },
+          data: { ativo: true },
+        });
+
+        if (trava.count !== 1) {
+          return { situacao: "paciente_inativo" };
+        }
+
+        const { count } = await tx.consulta.updateMany({
+          where: { id, status: atual.status },
+          data: {
+            status: StatusConsulta.REALIZADA,
+            atualizada_em: new Date(),
+          },
+        });
+
+        if (count !== 1) {
+          return { situacao: "alterada_por_outra_operacao" };
+        }
+
+        await tx.historicoConsulta.create({
+          data: {
+            consulta_id: id,
+            tipo: TipoHistoricoConsulta.MUDANCA_DE_STATUS,
+            status_anterior: atual.status,
+            status_novo: StatusConsulta.REALIZADA,
+            motivo: dados.motivo,
+            usuario_id: usuarioId,
+          },
+        });
+
+        const visita = await tx.historicoVisita.create({
+          data: {
+            data_visita: dados.data_visita,
+            procedimento: dados.procedimento,
+            observacoes: dados.observacoes,
+            paciente_id: atual.paciente_id,
+            dentista_id: atual.dentista_id,
+            consulta_id: id,
+          },
+        });
+
+        const retorno = await tx.retorno.create({
+          data: {
+            paciente_id: atual.paciente_id,
+            visita_origem_id: visita.id,
+            data_prevista: dados.data_prevista_retorno,
+          },
+        });
+
+        await tx.historicoRetorno.create({
+          data: {
+            retorno_id: retorno.id,
+            tipo: TipoHistoricoRetorno.CRIACAO,
+            situacao_nova: SituacaoRetorno.ABERTO,
+            data_nova: dados.data_prevista_retorno,
+            usuario_id: usuarioId,
+          },
+        });
+
+        const consulta = await tx.consulta.findUniqueOrThrow({
+          where: { id },
+          include,
+        });
+
+        return {
+          situacao: "realizada",
+          consulta,
+          visita_id: visita.id,
+          retorno_id: retorno.id,
+        };
+      }
+    );
+  }
+  catch (erro) {
+    if (violouUnicidade(erro)) {
+      return { situacao: "visita_ja_existe" };
+    }
+
+    throw erro;
+  }
 }
 
 

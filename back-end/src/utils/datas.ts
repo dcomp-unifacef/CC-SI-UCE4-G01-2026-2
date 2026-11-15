@@ -104,6 +104,45 @@ export function limitesDoDia(valor: unknown): { inicio: Date; fim: Date } | null
 }
 
 
+const formatadorDeDia = new Intl.DateTimeFormat('en-CA', {
+  timeZone: FUSO_DO_CONSULTORIO,
+})
+
+
+function ultimoDiaDoMes(ano: number, mesIndice: number): number {
+  return new Date(Date.UTC(ano, mesIndice + 1, 0)).getUTCDate()
+}
+
+
+export function somarMeses(data: Date, meses: number): Date {
+  const total = data.getUTCFullYear() * 12 + data.getUTCMonth() + meses
+  const ano = Math.floor(total / 12)
+  const mes = total - ano * 12
+  const dia = Math.min(data.getUTCDate(), ultimoDiaDoMes(ano, mes))
+
+  return new Date(Date.UTC(ano, mes, dia))
+}
+
+
+export function subtrairMeses(data: Date, meses: number): Date {
+  return somarMeses(data, -meses)
+}
+
+
+export function diaCivilNoConsultorio(instante: Date): Date {
+  return (
+    converterDia(formatadorDeDia.format(instante)) ??
+    new Date(
+      Date.UTC(
+        instante.getUTCFullYear(),
+        instante.getUTCMonth(),
+        instante.getUTCDate()
+      )
+    )
+  )
+}
+
+
 export function converterDia(valor: unknown): Date | null {
   if (typeof valor !== 'string') return null
 

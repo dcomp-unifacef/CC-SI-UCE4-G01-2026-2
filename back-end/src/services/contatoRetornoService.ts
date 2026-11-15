@@ -23,7 +23,9 @@ import {
 } from "../utils/validators.ts";
 
 
-type ContatoComUsuario = Awaited<ReturnType<typeof repository.create>>;
+type ContatoComUsuario = NonNullable<
+  Awaited<ReturnType<typeof repository.create>>
+>;
 
 
 const RESULTADOS: string[] = Object.values(ResultadoContatoRetorno);
@@ -109,6 +111,10 @@ export async function create(
     },
     usuario.id
   );
+
+  if (contato === null) {
+    throw new BadRequestError("Paciente desativado não pode receber contato.");
+  }
 
   return paraResposta(contato, podeVerAnotacao(usuario));
 }

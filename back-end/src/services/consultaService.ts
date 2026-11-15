@@ -11,6 +11,7 @@ import type { CadastroConsultaDto } from "../dto/consulta/cadastroConsultaDto.ts
 import type { AlteracaoStatusConsultaDto } from "../dto/consulta/alteracaoStatusConsultaDto.ts";
 import type { ReagendamentoConsultaDto } from "../dto/consulta/reagendamentoConsultaDto.ts";
 import type { ConsultaRespostaDto } from "../dto/consulta/consultaRespostaDto.ts";
+import type { RealizacaoConsultaRespostaDto } from "../dto/consulta/realizacaoConsultaRespostaDto.ts";
 import type { HistoricoConsultaRespostaDto } from "../dto/consulta/historicoConsultaRespostaDto.ts";
 
 import { AppError } from "../errors/AppError.ts";
@@ -21,8 +22,11 @@ import { NotFoundError } from "../errors/NotFoundError.ts";
 
 import {
   converterDataHora,
+  diaCivilNoConsultorio,
   formatarDataHora,
+  formatarDia,
   limitesDoDia,
+  somarMeses,
 } from "../utils/datas.ts";
 import {
   booleanoOpcional,
@@ -52,6 +56,21 @@ const MENSAGEM_HORARIO_INDISPONIVEL =
   "Horário indisponível para este dentista.";
 const MENSAGEM_ALTERADA_POR_OUTRA_OPERACAO =
   "A consulta foi alterada por outra operação. Consulte novamente e tente de novo.";
+
+const MENSAGEM_REALIZACAO_RESTRITA =
+  "Somente o dono ou o dentista podem marcar a consulta como realizada.";
+const MENSAGEM_CAMPOS_DA_REALIZACAO =
+  'Os campos "procedimento", "observacoes" e "retorno_meses" só podem ser informados ao marcar a consulta como realizada.';
+const MENSAGEM_RETORNO_MESES =
+  'O campo "retorno_meses" deve ser 3, 6 ou 12.';
+const MENSAGEM_PACIENTE_SEM_VISITA =
+  "Paciente desativado não pode ter visita registrada.";
+const MENSAGEM_VISITA_JA_EXISTE =
+  "Já existe uma visita registrada para esta consulta.";
+
+const CAMPOS_DA_REALIZACAO = ["procedimento", "observacoes", "retorno_meses"];
+const OPCOES_DE_RETORNO_EM_MESES = [3, 6, 12];
+const RETORNO_PADRAO_EM_MESES = 6;
 
 const TOLERANCIA_DO_ENCAIXE_MS = 30 * 60 * 1000;
 
@@ -142,6 +161,24 @@ function lerDataHora(corpo: Record<string, unknown>, campo: string): Date {
   }
 
   return data;
+}
+
+
+function lerDadosDoAtendimento(corpo: Record<string, unknown>): {
+  procedimento: string;
+  observacoes: string | null;
+  retorno_meses: number;
+} {
+  const procedimento = textoObrigatorio(corpo, "procedimento");
+  const observacoes = textoOpcional(corpo, "observacoes") ?? null;
+  const retorno_meses =
+    inteiroOpcional(corpo, "retorno_meses") ?? RETORNO_PADRAO_EM_MESES;
+
+  if (!OPCOES_DE_RETORNO_EM_MESES.includes(retorno_meses)) {
+    throw new BadRequestError(MENSAGEM_RETORNO_MESES);
+  }
+
+  return { procedimento, observacoes, retorno_meses };
 }
 
 
@@ -434,6 +471,25 @@ export async function mudarStatus(
     throw new ForbiddenError(MENSAGEM_ACESSO_NEGADO);
   }
 
+  const realizacao = novo === StatusConsulta.REALIZADA;
+
+  if (
+    realizacao &&
+    usuario.perfil !== Perfil.DONO &&
+    usuario.perfil !== Perfil.DENTISTA
+  ) {
+    throw new ForbiddenError(MENSAGEM_REALIZACAO_RESTRITA);
+  }
+
+  if (
+    !realizacao &&
+    CAMPOS_DA_REALIZACAO.some((campo) => corpo[campo] !== undefined)
+  ) {
+    throw new BadRequestError(MENSAGEM_CAMPOS_DA_REALIZACAO);
+  }
+
+  const atendimento = realizacao ? lerDadosDoAtendimento(corpo) : null;
+
   const consulta = await buscarOuFalhar(id);
 
   if (consulta.status === novo) {
@@ -460,6 +516,55 @@ export async function mudarStatus(
     throw new ConflictError(
       "Só é possível registrar a consulta como realizada ou faltou depois do horário de início."
     );
+  }
+
+  if (atendimento !== null) {
+    const data_visita = diaCivilNoConsultorio(consulta.inicio_em);
+    const data_prevista_retorno = somarMeses(
+      data_visita,
+      atendimento.retorno_meses
+    );
+
+    const resultado = await repository.realizarComVisita(
+      id,
+      {
+        data_visita,
+        procedimento: atendimento.procedimento,
+        observacoes: atendimento.observacoes,
+        data_prevista_retorno,
+        motivo: motivo ?? null,
+      },
+      usuario.id,
+      [StatusConsulta.AGENDADA, StatusConsulta.CONFIRMADA]
+    );
+
+    switch (resultado.situacao) {
+      case "realizada": {
+        const resposta: RealizacaoConsultaRespostaDto = {
+          ...paraResposta(resultado.consulta),
+          visita: {
+            id: resultado.visita_id,
+            data_visita: formatarDia(data_visita),
+          },
+          retorno: {
+            id: resultado.retorno_id,
+            data_prevista: formatarDia(data_prevista_retorno),
+          },
+        };
+
+        return resposta;
+      }
+      case "nao_encontrada":
+        throw new NotFoundError("Consulta não encontrada.");
+      case "paciente_inativo":
+        throw new ConflictError(MENSAGEM_PACIENTE_SEM_VISITA);
+      case "sem_mudanca":
+        throw new ConflictError("A consulta já está com este status.");
+      case "alterada_por_outra_operacao":
+        throw new ConflictError(MENSAGEM_ALTERADA_POR_OUTRA_OPERACAO);
+      case "visita_ja_existe":
+        throw new ConflictError(MENSAGEM_VISITA_JA_EXISTE);
+    }
   }
 
   const reabertura =
@@ -497,7 +602,10 @@ export async function mudarStatus(
       novo,
       usuario.id,
       motivo,
-      reabertura
+      reabertura,
+      (Object.keys(TRANSICOES) as StatusConsulta[]).filter((origem) =>
+        TRANSICOES[origem].includes(novo)
+      )
     );
 
     switch (resultado.situacao) {

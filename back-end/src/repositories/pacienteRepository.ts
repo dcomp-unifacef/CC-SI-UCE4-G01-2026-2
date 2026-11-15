@@ -18,6 +18,48 @@ export function findAll() {
 }
 
 
+export function findByCpfPrefixo(
+  prefixo: string,
+  incluirDesativados: boolean,
+  limite: number
+) {
+  return prisma.paciente.findMany({
+    where: {
+      cpf: { startsWith: prefixo },
+      ...(incluirDesativados ? {} : { ativo: true }),
+    },
+    orderBy: [
+      { nome: "asc" },
+      { id: "asc" },
+    ],
+    take: limite,
+  });
+}
+
+
+export function findIdsENomes(incluirDesativados: boolean) {
+  return prisma.paciente.findMany({
+    where: incluirDesativados ? {} : { ativo: true },
+    select: { id: true, nome: true },
+    orderBy: [
+      { nome: "asc" },
+      { id: "asc" },
+    ],
+  });
+}
+
+
+export function findByIds(ids: number[]) {
+  return prisma.paciente.findMany({
+    where: { id: { in: ids } },
+    orderBy: [
+      { nome: "asc" },
+      { id: "asc" },
+    ],
+  });
+}
+
+
 export function findById(id: number) {
   return prisma.paciente.findUnique({
     where: { id },

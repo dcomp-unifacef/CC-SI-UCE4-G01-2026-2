@@ -45,6 +45,25 @@ export function findByConsulta(consulta_id: number) {
 }
 
 
+export function findUltimasVisitasDePacientesAtivos() {
+  return prisma.historicoVisita.findMany({
+    where: { paciente: { ativo: true } },
+    distinct: ["paciente_id"],
+    orderBy: [
+      { paciente_id: "asc" },
+      { data_visita: "desc" },
+      { id: "desc" },
+    ],
+    include: {
+      ...include,
+      retornos: {
+        select: { id: true, data_prevista: true, situacao: true },
+      },
+    },
+  });
+}
+
+
 export function findMaisRecenteDoPaciente(paciente_id: number) {
   return prisma.historicoVisita.findFirst({
     where: { paciente_id },

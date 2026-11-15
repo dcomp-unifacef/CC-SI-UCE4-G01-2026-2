@@ -15,6 +15,7 @@ const somenteDono = exigirPerfil(Perfil.DONO);
 
 
 router.get("/", todos, controller.index);
+router.get("/atrasos", todos, controller.atrasos);
 router.get("/:id", todos, controller.retrieve);
 router.get("/:id/historico", todos, controller.historico);
 router.post("/", clinicos, controller.create);
