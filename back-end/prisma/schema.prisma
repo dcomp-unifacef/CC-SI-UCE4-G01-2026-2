@@ -83,6 +83,8 @@ model Usuario {
   retornosEncerrados Retorno[]
   historicosRetorno  HistoricoRetorno[]
   contatosRetorno    ContatoRetorno[]
+  backupsSolicitados BackupExecucao[] @relation("BackupSolicitadoPor")
+  backupsVistos      BackupExecucao[] @relation("BackupAvisoVistoPor")
 }
 
 model Configuracao {
@@ -90,6 +92,7 @@ model Configuracao {
   sessao_inatividade_min   Int      @default(30)
   sessao_duracao_max_min   Int      @default(480)
   consulta_duracao_max_min Int      @default(240)
+  backup_horario_min       Int      @default(120)
   atualizado_em            DateTime @updatedAt @db.Timestamptz(3)
   atualizado_por_id        Int?
   atualizado_por           Usuario? @relation(fields: [atualizado_por_id], references: [id], onDelete: Restrict)
@@ -227,4 +230,38 @@ model ContatoRetorno {
   anotacao      String?
 
   @@index([paciente_id, registrado_em])
+}
+
+enum SituacaoBackup {
+  EM_ANDAMENTO
+  CONCLUIDO
+  FALHOU
+}
+
+enum OrigemBackup {
+  AGENDADO
+  MANUAL
+}
+
+model BackupExecucao {
+  id                 Int            @id @default(autoincrement())
+  origem             OrigemBackup
+  situacao           SituacaoBackup @default(EM_ANDAMENTO)
+  data_referencia    DateTime?      @db.Date
+  iniciado_em        DateTime       @default(now()) @db.Timestamptz(3)
+  ultimo_sinal_em    DateTime       @default(now()) @db.Timestamptz(3)
+  finalizado_em      DateTime?      @db.Timestamptz(3)
+  arquivo            String?        @unique
+  tamanho_bytes      BigInt?
+  sha256             String?
+  arquivo_removido_em DateTime?     @db.Timestamptz(3)
+  erro               String?
+  solicitado_por_id  Int?
+  solicitado_por     Usuario?       @relation("BackupSolicitadoPor", fields: [solicitado_por_id], references: [id], onDelete: Restrict)
+  aviso_visto_em     DateTime?      @db.Timestamptz(3)
+  aviso_visto_por_id Int?
+  aviso_visto_por    Usuario?       @relation("BackupAvisoVistoPor", fields: [aviso_visto_por_id], references: [id], onDelete: Restrict)
+
+  @@index([iniciado_em])
+  @@index([situacao, finalizado_em])
 }
