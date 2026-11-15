@@ -371,10 +371,7 @@ export function findHistorico(orcamento_id: number) {
   return prisma.historicoOrcamento.findMany({
     where: { orcamento_id },
     include: { usuario: usuarioMinimo },
-    orderBy: [
-      { registrado_em: "asc" },
-      { id: "asc" },
-    ],
+    orderBy: [{ id: "asc" }],
   });
 }
 

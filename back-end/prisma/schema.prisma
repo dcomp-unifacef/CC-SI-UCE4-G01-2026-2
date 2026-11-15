@@ -36,6 +36,8 @@ model Paciente {
   retornos        Retorno[]
   contatosRetorno ContatoRetorno[]
   orcamentos      Orcamento[]
+  consentimentos  ConsentimentoPaciente[]
+  acessos         LogAcesso[]
 }
 
 model Dentista {
@@ -90,6 +92,8 @@ model Usuario {
   orcamentosCriados   Orcamento[]          @relation("OrcamentoCriadoPor")
   orcamentosDecididos Orcamento[]          @relation("OrcamentoDecididoPor")
   historicosOrcamento HistoricoOrcamento[]
+  consentimentos      ConsentimentoPaciente[]
+  acessos             LogAcesso[]
 }
 
 model Configuracao {
@@ -350,4 +354,44 @@ model HistoricoOrcamento {
   registrado_em           DateTime               @default(now()) @db.Timestamptz(3)
 
   @@index([orcamento_id])
+}
+
+enum AcaoConsentimento {
+  CONCESSAO
+  REVOGACAO
+}
+
+model ConsentimentoPaciente {
+  id                Int               @id @default(autoincrement())
+  paciente_id       Int
+  paciente          Paciente          @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
+  acao              AcaoConsentimento
+  termo             String
+  registrado_por_id Int
+  registrado_por    Usuario           @relation(fields: [registrado_por_id], references: [id], onDelete: Restrict)
+  registrado_em     DateTime          @default(now()) @db.Timestamptz(3)
+
+  @@index([paciente_id, registrado_em])
+}
+
+enum TipoAcessoPaciente {
+  FICHA
+  ORCAMENTO
+  ORCAMENTO_PDF
+  VISITA
+  LISTA_PACIENTES
+  LISTA_VISITAS
+}
+
+model LogAcesso {
+  id          Int                @id @default(autoincrement())
+  usuario_id  Int
+  usuario     Usuario            @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  paciente_id Int
+  paciente    Paciente           @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
+  tipo        TipoAcessoPaciente
+  acessado_em DateTime           @default(now()) @db.Timestamptz(3)
+
+  @@index([paciente_id, acessado_em])
+  @@index([usuario_id, acessado_em])
 }
