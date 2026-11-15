@@ -16,6 +16,7 @@ const clinicos = exigirPerfil(Perfil.DONO, Perfil.DENTISTA);
 router.get("/", todos, controller.index);
 router.get("/:id", todos, controller.retrieve);
 router.get("/:id/historico", todos, controller.historico);
+router.get("/:id/pdf", todos, controller.pdf);
 router.post("/", clinicos, controller.create);
 router.patch("/:id", clinicos, controller.updateCabecalho);
 router.post("/:id/itens", clinicos, controller.addItem);

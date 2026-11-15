@@ -6,6 +6,7 @@ import type {
 
 
 import * as service from "../services/orcamentoService.ts";
+import * as pdfService from "../services/orcamentoPdfService.ts";
 
 
 import type { CadastroOrcamentoDto } from "../dto/orcamento/cadastroOrcamentoDto.ts";
@@ -86,6 +87,29 @@ export async function retrieve(
 
 
     res.json(orcamento);
+  }
+  catch (error) {
+    next(error);
+  }
+}
+
+
+export async function pdf(
+  req: Request<OrcamentoIdParams>,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const arquivo = await pdfService.gerar(Number(req.params.id));
+
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${arquivo.nomeDoArquivo}"`
+    );
+    res.setHeader("Cache-Control", "no-store");
+    res.send(arquivo.conteudo);
   }
   catch (error) {
     next(error);
