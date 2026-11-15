@@ -13,6 +13,8 @@ import sessoesRouter from './routes/sessoes.ts'
 import usuariosRouter from './routes/usuarios.ts'
 import configuracoesRouter from './routes/configuracoes.ts'
 import consultasRouter from './routes/consultas.ts'
+import retornosRouter from './routes/retornos.ts'
+import contatosRetornoRouter from './routes/contatosRetorno.ts'
 
 import { Perfil } from '../generated/prisma/client.ts'
 
@@ -76,6 +78,8 @@ app.use('/dentistas', autenticado, exigirPerfilPorMetodo({
 }), dentistasRouter)
 
 app.use('/consultas', autenticado, consultasRouter)
+app.use('/retornos', autenticado, retornosRouter)
+app.use('/contatos-retorno', autenticado, contatosRetornoRouter)
 app.use('/historico-visitas', protegidoSomenteDono, historicoVisitasRouter)
 app.use('/configuracoes', protegidoSomenteDono, configuracoesRouter)
 

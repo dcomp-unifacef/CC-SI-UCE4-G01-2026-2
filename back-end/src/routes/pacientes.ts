@@ -1,12 +1,15 @@
 import { Router } from "express";
 import * as controller
   from "../controllers/pacienteController.ts";
+import * as ultimaVisitaController
+  from "../controllers/ultimaVisitaController.ts";
 
 
 const router = Router();
 
 
 router.get("/", controller.retrieveAll);
+router.get("/:id/ultima-visita", ultimaVisitaController.retrieve);
 router.get("/:id", controller.retrieveOne);
 router.post("/", controller.create);
 router.patch("/:id", controller.update);

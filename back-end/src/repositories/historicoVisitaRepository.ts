@@ -1,5 +1,7 @@
 import { prisma } from "../database/client.ts";
 
+import type { HistoricoVisita } from "../../generated/prisma/client.ts";
+
 import type { CreateHistoricoVisitaDto }
   from "../dto/historicoVisita/createHistoricoVisitaDto.ts";
 
@@ -92,6 +94,65 @@ export function create(
   return prisma.historicoVisita.create({
     data,
   });
+}
+
+
+export type ResultadoDaTrocaDePaciente =
+  | { situacao: "alterada"; visita: HistoricoVisita }
+  | { situacao: "nao_encontrada" }
+  | { situacao: "alterada_por_outra_operacao" }
+  | { situacao: "com_retorno" }
+  | { situacao: "com_consulta" };
+
+
+export function updateComTrocaDePaciente(
+  id: number,
+  data: UpdateHistoricoVisitaDto & { paciente_id: number }
+) {
+  return prisma.$transaction(
+    async (tx): Promise<ResultadoDaTrocaDePaciente> => {
+      const atual = await tx.historicoVisita.findUnique({
+        where: { id },
+        select: { paciente_id: true },
+      });
+
+      if (!atual) {
+        return { situacao: "nao_encontrada" };
+      }
+
+      const trava = await tx.historicoVisita.updateMany({
+        where: { id, paciente_id: atual.paciente_id },
+        data: { paciente_id: atual.paciente_id },
+      });
+
+      if (trava.count !== 1) {
+        return { situacao: "alterada_por_outra_operacao" };
+      }
+
+      const vinculos = await tx.historicoVisita.findUniqueOrThrow({
+        where: { id },
+        select: {
+          consulta_id: true,
+          _count: { select: { retornos: true } },
+        },
+      });
+
+      if (vinculos._count.retornos > 0) {
+        return { situacao: "com_retorno" };
+      }
+
+      if (vinculos.consulta_id !== null) {
+        return { situacao: "com_consulta" };
+      }
+
+      const visita = await tx.historicoVisita.update({
+        where: { id },
+        data,
+      });
+
+      return { situacao: "alterada", visita };
+    }
+  );
 }
 
 

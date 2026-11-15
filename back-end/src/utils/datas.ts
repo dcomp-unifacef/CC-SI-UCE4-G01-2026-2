@@ -104,6 +104,46 @@ export function limitesDoDia(valor: unknown): { inicio: Date; fim: Date } | null
 }
 
 
+export function converterDia(valor: unknown): Date | null {
+  if (typeof valor !== 'string') return null
+
+  const partes = PADRAO_DIA.exec(valor)
+  if (partes === null) return null
+
+  const ano = Number(partes[1])
+  const mes = Number(partes[2])
+  const dia = Number(partes[3])
+
+  if (!dataExiste(ano, mes, dia)) return null
+
+  return new Date(Date.UTC(ano, mes - 1, dia))
+}
+
+
+export function formatarDia(data: Date): string {
+  return data.toISOString().slice(0, 10)
+}
+
+
+export function diasEntre(inicio: Date, fim: Date): number {
+  return Math.floor((fim.getTime() - inicio.getTime()) / (24 * 60 * 60 * 1000))
+}
+
+
+export function mesesCompletosEntre(inicio: Date, fim: Date): number {
+  let meses =
+    (fim.getUTCFullYear() - inicio.getUTCFullYear()) * 12 +
+    fim.getUTCMonth() -
+    inicio.getUTCMonth()
+
+  if (fim.getUTCDate() < inicio.getUTCDate()) {
+    meses -= 1
+  }
+
+  return Math.max(0, meses)
+}
+
+
 export function formatarDataHora(data: Date): string {
   return formatadorDeExibicao.format(data)
 }

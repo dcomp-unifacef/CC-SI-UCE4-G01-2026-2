@@ -1,0 +1,56 @@
+import * as visitaRepository from "../repositories/historicoVisitaRepository.ts";
+import * as pacienteRepository from "../repositories/pacienteRepository.ts";
+
+import type { UltimaVisitaRespostaDto } from "../dto/historicoVisita/ultimaVisitaRespostaDto.ts";
+
+import { NotFoundError } from "../errors/NotFoundError.ts";
+
+import {
+  converterDia,
+  diasEntre,
+  formatarDia,
+  mesesCompletosEntre,
+} from "../utils/datas.ts";
+import { hoje, validarId } from "../utils/validators.ts";
+
+
+export async function ultimaVisita(
+  paciente_id: number
+): Promise<UltimaVisitaRespostaDto> {
+  validarId(paciente_id);
+
+  const paciente = await pacienteRepository.findById(paciente_id);
+
+  if (!paciente) {
+    throw new NotFoundError("Paciente não encontrado.");
+  }
+
+  const visita = await visitaRepository.findMaisRecenteDoPaciente(paciente_id);
+
+  if (!visita) {
+    return {
+      paciente_id,
+      sem_historico: true,
+      ultima_visita: null,
+      dias_desde: null,
+      meses_desde: null,
+    };
+  }
+
+  const referencia = converterDia(hoje()) ?? new Date();
+
+  return {
+    paciente_id,
+    sem_historico: false,
+    ultima_visita: {
+      id: visita.id,
+      data_visita: formatarDia(visita.data_visita),
+      dentista: {
+        id: visita.dentista.id,
+        nome: visita.dentista.nome,
+      },
+    },
+    dias_desde: Math.max(0, diasEntre(visita.data_visita, referencia)),
+    meses_desde: mesesCompletosEntre(visita.data_visita, referencia),
+  };
+}

@@ -133,6 +133,25 @@ export function emailValido(email: string): boolean {
 }
 
 
+export function idDaQuery(
+  query: Record<string, unknown>,
+  campo: string
+): number | undefined {
+  const valor = query[campo]
+
+  if (valor === undefined) return undefined
+
+  if (typeof valor !== 'string' || !/^\d{1,10}$/.test(valor.trim())) {
+    throw new BadRequestError(`O parâmetro "${campo}" é inválido.`)
+  }
+
+  const id = Number(valor.trim())
+  validarId(id)
+
+  return id
+}
+
+
 export function erroPrisma(error: unknown, codigo: string): boolean {
   return typeof error === 'object' && error !== null && (error as { code?: string }).code === codigo
 }

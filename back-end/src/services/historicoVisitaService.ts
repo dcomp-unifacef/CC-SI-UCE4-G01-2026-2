@@ -8,10 +8,12 @@ import type { UpdateHistoricoVisitaDto } from "../dto/historicoVisita/updateHist
 
 import { NotFoundError } from "../errors/NotFoundError.ts";
 import { BadRequestError } from "../errors/BadRequestError.ts";
+import { ConflictError } from "../errors/ConflictError.ts";
 
 import {
   converterData,
   dataFutura,
+  erroPrisma,
   exigirCorpo,
   inteiroObrigatorio,
   inteiroOpcional,
@@ -19,6 +21,18 @@ import {
   textoOpcional,
   validarId,
 } from "../utils/validators.ts";
+
+
+const MENSAGEM_VISITA_COM_RETORNO =
+  "Visita possui retorno vinculado e não pode ser excluída. Descartar o retorno não libera a exclusão, porque o histórico de retornos é preservado.";
+const MENSAGEM_VISITA_DE_CONSULTA =
+  "Visita registrada a partir de uma consulta e não pode ser excluída.";
+const MENSAGEM_PACIENTE_COM_RETORNO =
+  "O paciente de uma visita com retorno vinculado não pode ser alterado.";
+const MENSAGEM_PACIENTE_DE_CONSULTA =
+  "O paciente de uma visita registrada a partir de uma consulta não pode ser alterado.";
+const MENSAGEM_ALTERADA_POR_OUTRA_OPERACAO =
+  "A visita foi alterada por outra operação. Consulte novamente e tente de novo.";
 
 
 async function validarPaciente(
@@ -127,7 +141,7 @@ export async function update(
   id: number,
   data: UpdateHistoricoVisitaDto
 ): Promise<HistoricoVisita> {
-  await findById(id);
+  const atual = await findById(id);
 
   const corpo = exigirCorpo(data);
   const alteracoes: UpdateHistoricoVisitaDto = {};
@@ -156,6 +170,26 @@ export async function update(
     alteracoes.dentista_id = dentista_id;
   }
 
+  if (paciente_id !== undefined && paciente_id !== atual.paciente_id) {
+    const resultado = await repository.updateComTrocaDePaciente(id, {
+      ...alteracoes,
+      paciente_id,
+    });
+
+    switch (resultado.situacao) {
+      case "alterada":
+        return resultado.visita;
+      case "nao_encontrada":
+        throw new NotFoundError("Visita não encontrada.");
+      case "com_retorno":
+        throw new ConflictError(MENSAGEM_PACIENTE_COM_RETORNO);
+      case "com_consulta":
+        throw new ConflictError(MENSAGEM_PACIENTE_DE_CONSULTA);
+      case "alterada_por_outra_operacao":
+        throw new ConflictError(MENSAGEM_ALTERADA_POR_OUTRA_OPERACAO);
+    }
+  }
+
   return repository.update(id, alteracoes);
 }
 
@@ -163,7 +197,30 @@ export async function update(
 export async function remove(
   id: number
 ): Promise<HistoricoVisita> {
-  await findById(id);
+  validarId(id);
 
-  return repository.remove(id);
+  const vinculos = await repository.contarVinculos(id);
+
+  if (vinculos === null) {
+    throw new NotFoundError("Visita não encontrada.");
+  }
+
+  if (vinculos.retornos > 0) {
+    throw new ConflictError(MENSAGEM_VISITA_COM_RETORNO);
+  }
+
+  if (vinculos.consulta_id !== null) {
+    throw new ConflictError(MENSAGEM_VISITA_DE_CONSULTA);
+  }
+
+  try {
+    return await repository.remove(id);
+  }
+  catch (error) {
+    if (erroPrisma(error, "P2003")) {
+      throw new ConflictError(MENSAGEM_VISITA_COM_RETORNO);
+    }
+
+    throw error;
+  }
 }
