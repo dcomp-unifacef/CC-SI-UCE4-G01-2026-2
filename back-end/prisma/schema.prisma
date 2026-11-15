@@ -33,6 +33,8 @@ model Paciente {
   ativo           Boolean  @default(true) // Desativação lógica (US15)
   visitas         HistoricoVisita[] // Lista virtual: visitas do paciente (lado 1)
   consultas       Consulta[]
+  retornos        Retorno[]
+  contatosRetorno ContatoRetorno[]
 }
 
 model Dentista {
@@ -53,6 +55,9 @@ model HistoricoVisita {
   paciente        Paciente @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
   dentista_id     Int      // Dentista responsável pelo atendimento
   dentista        Dentista @relation(fields: [dentista_id], references: [id], onDelete: Restrict)
+  consulta_id     Int?     @unique
+  consulta        Consulta? @relation(fields: [consulta_id], references: [id], onDelete: Restrict)
+  retornos        Retorno[]
 }
 
 enum Perfil {
@@ -75,6 +80,9 @@ model Usuario {
   sessoes           Sessao[]
   configuracoes     Configuracao[]
   historicosConsulta HistoricoConsulta[]
+  retornosEncerrados Retorno[]
+  historicosRetorno  HistoricoRetorno[]
+  contatosRetorno    ContatoRetorno[]
 }
 
 model Configuracao {
@@ -122,6 +130,7 @@ model Consulta {
   criada_em     DateTime       @default(now()) @db.Timestamptz(3)
   atualizada_em DateTime       @updatedAt @db.Timestamptz(3)
   historico     HistoricoConsulta[]
+  visita        HistoricoVisita?
 
   @@index([dentista_id, inicio_em])
   @@index([paciente_id])
@@ -150,4 +159,72 @@ model HistoricoConsulta {
   registrado_em        DateTime              @default(now()) @db.Timestamptz(3)
 
   @@index([consulta_id])
+}
+
+enum SituacaoRetorno {
+  ABERTO
+  ATENDIDO
+  DESCARTADO
+}
+
+enum TipoHistoricoRetorno {
+  CRIACAO
+  CORRECAO_DE_DATA
+  DESCARTE
+  ATENDIMENTO
+}
+
+model Retorno {
+  id               Int             @id @default(autoincrement())
+  paciente_id      Int
+  paciente         Paciente        @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
+  visita_origem_id Int
+  visita_origem    HistoricoVisita @relation(fields: [visita_origem_id], references: [id], onDelete: Restrict)
+  data_prevista    DateTime        @db.Date
+  situacao         SituacaoRetorno @default(ABERTO)
+  criado_em        DateTime        @default(now()) @db.Timestamptz(3)
+  encerrado_em     DateTime?       @db.Timestamptz(3)
+  encerrado_por_id Int?
+  encerrado_por    Usuario?        @relation(fields: [encerrado_por_id], references: [id], onDelete: Restrict)
+  motivo_descarte  String?
+  historico        HistoricoRetorno[]
+
+  @@index([paciente_id])
+  @@index([situacao, data_prevista])
+}
+
+model HistoricoRetorno {
+  id                Int                  @id @default(autoincrement())
+  retorno_id        Int
+  retorno           Retorno              @relation(fields: [retorno_id], references: [id], onDelete: Restrict)
+  tipo              TipoHistoricoRetorno
+  data_anterior     DateTime?            @db.Date
+  data_nova         DateTime?            @db.Date
+  situacao_anterior SituacaoRetorno?
+  situacao_nova     SituacaoRetorno
+  motivo            String?
+  usuario_id        Int
+  usuario           Usuario              @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  registrado_em     DateTime             @default(now()) @db.Timestamptz(3)
+
+  @@index([retorno_id])
+}
+
+enum ResultadoContatoRetorno {
+  SEM_RESPOSTA
+  AGENDOU
+  RECUSOU
+}
+
+model ContatoRetorno {
+  id            Int                     @id @default(autoincrement())
+  paciente_id   Int
+  paciente      Paciente                @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
+  usuario_id    Int
+  usuario       Usuario                 @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  registrado_em DateTime                @default(now()) @db.Timestamptz(3)
+  resultado     ResultadoContatoRetorno
+  anotacao      String?
+
+  @@index([paciente_id, registrado_em])
 }
