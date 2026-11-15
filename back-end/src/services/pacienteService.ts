@@ -1,4 +1,5 @@
 import * as repository from "../repositories/pacienteRepository.ts";
+import * as orcamentoRepository from "../repositories/orcamentoRepository.ts";
 
 import { StatusConsulta } from "../../generated/prisma/client.ts";
 import type { Paciente } from "../../generated/prisma/client.ts";
@@ -30,6 +31,8 @@ const MENSAGEM_COM_VISITAS =
   "Paciente possui histórico de visitas e não pode ser excluído. Desative o cadastro.";
 const MENSAGEM_COM_CONSULTAS =
   "Paciente possui consultas na agenda e não pode ser excluído. Desative o cadastro.";
+const MENSAGEM_COM_ORCAMENTOS =
+  "Paciente possui orçamentos e não pode ser excluído. Desative o cadastro.";
 const MENSAGEM_COM_CONSULTA_FUTURA =
   "Paciente possui consulta futura agendada ou confirmada e não pode ser desativado.";
 
@@ -254,11 +257,19 @@ export async function remove(
     throw new ConflictError(MENSAGEM_COM_CONSULTAS);
   }
 
+  if (await orcamentoRepository.countByPaciente(id) > 0) {
+    throw new ConflictError(MENSAGEM_COM_ORCAMENTOS);
+  }
+
   try {
     return await repository.remove(id);
   }
   catch (error) {
     if (erroPrisma(error, "P2003")) {
+      if (await orcamentoRepository.countByPaciente(id) > 0) {
+        throw new ConflictError(MENSAGEM_COM_ORCAMENTOS);
+      }
+
       throw new ConflictError(MENSAGEM_COM_VISITAS);
     }
 

@@ -28,6 +28,10 @@ import type { ReaberturaOrcamentoDto }
 
 export const LIMITE_TOTAL_CENTAVOS = 2_000_000_000;
 
+export const LIMITE_ITENS = 50;
+
+const OPCOES_TRANSACAO = { maxWait: 10_000, timeout: 20_000 };
+
 
 const usuarioMinimo = { select: { id: true, nome: true } };
 
@@ -85,6 +89,8 @@ export type ResultadoDoOrcamento =
   | { situacao: "nao_decidido" }
   | { situacao: "sem_mudanca" }
   | { situacao: "total_excedido" }
+  | { situacao: "limite_itens" }
+  | { situacao: "sem_itens" }
   | { situacao: "alterada_por_outra_operacao" };
 
 
@@ -122,7 +128,7 @@ async function emTransacao(
       }
 
       return resultado;
-    });
+    }, OPCOES_TRANSACAO);
   }
   catch (erro) {
     if (erro instanceof Desfazer) {
@@ -189,6 +195,30 @@ async function validarPaciente(
   }
 
   return null;
+}
+
+
+async function travarPacienteAtivo(
+  tx: Transacao,
+  orcamentoId: number
+): Promise<Falha | null> {
+  const trava = await tx.paciente.updateMany({
+    where: { ativo: true, orcamentos: { some: { id: orcamentoId } } },
+    data: { ativo: true },
+  });
+
+  if (trava.count === 1) {
+    return null;
+  }
+
+  const existe = await tx.orcamento.findUnique({
+    where: { id: orcamentoId },
+    select: { id: true },
+  });
+
+  return existe
+    ? { situacao: "paciente_inativo" }
+    : { situacao: "nao_encontrado" };
 }
 
 
@@ -368,6 +398,10 @@ export function criar(
   usuarioId: number
 ): Promise<ResultadoDoOrcamento> {
   return emTransacao(async (tx) => {
+    if (data.itens.length > LIMITE_ITENS) {
+      return { situacao: "limite_itens" };
+    }
+
     const paciente = await validarPaciente(tx, data.paciente_id);
 
     if (paciente) {
@@ -434,6 +468,12 @@ export function atualizarCabecalho(
   usuarioId: number
 ): Promise<ResultadoDoOrcamento> {
   return emTransacao(async (tx) => {
+    const paciente = await travarPacienteAtivo(tx, id);
+
+    if (paciente) {
+      return paciente;
+    }
+
     const atual = await tx.orcamento.findUnique({
       where: { id },
       select: {
@@ -516,6 +556,12 @@ export function adicionarItem(
   usuarioId: number
 ): Promise<ResultadoDoOrcamento> {
   return emTransacao(async (tx) => {
+    const paciente = await travarPacienteAtivo(tx, id);
+
+    if (paciente) {
+      return paciente;
+    }
+
     const trava = await travarPendente(tx, id);
 
     if (trava) {
@@ -532,6 +578,10 @@ export function adicionarItem(
       where: { orcamento_id: id },
       select: { valor_unitario_centavos: true, quantidade: true },
     });
+
+    if (atuais.length >= LIMITE_ITENS) {
+      return { situacao: "limite_itens" };
+    }
 
     const totalAnterior = somar(atuais);
     const totalNovo = somar([...atuais, ...montados.itens]);
@@ -558,6 +608,12 @@ export function alterarQuantidadeDoItem(
   usuarioId: number
 ): Promise<ResultadoDoOrcamento> {
   return emTransacao(async (tx) => {
+    const paciente = await travarPacienteAtivo(tx, id);
+
+    if (paciente) {
+      return paciente;
+    }
+
     const trava = await travarPendente(tx, id);
 
     if (trava) {
@@ -610,6 +666,12 @@ export function removerItem(
   usuarioId: number
 ): Promise<ResultadoDoOrcamento> {
   return emTransacao(async (tx) => {
+    const paciente = await travarPacienteAtivo(tx, id);
+
+    if (paciente) {
+      return paciente;
+    }
+
     const trava = await travarPendente(tx, id);
 
     if (trava) {
@@ -647,6 +709,12 @@ export function decidir(
   usuarioId: number
 ): Promise<ResultadoDoOrcamento> {
   return emTransacao(async (tx) => {
+    const paciente = await travarPacienteAtivo(tx, id);
+
+    if (paciente) {
+      return paciente;
+    }
+
     const atual = await tx.orcamento.findUnique({
       where: { id },
       select: { situacao: true },
@@ -673,6 +741,14 @@ export function decidir(
       return { situacao: "alterada_por_outra_operacao" };
     }
 
+    const quantidadeDeItens = await tx.itemOrcamento.count({
+      where: { orcamento_id: id },
+    });
+
+    if (quantidadeDeItens === 0) {
+      return { situacao: "sem_itens" };
+    }
+
     await tx.historicoOrcamento.create({
       data: {
         orcamento_id: id,
@@ -695,6 +771,12 @@ export function corrigirDecisao(
   usuarioId: number
 ): Promise<ResultadoDoOrcamento> {
   return emTransacao(async (tx) => {
+    const paciente = await travarPacienteAtivo(tx, id);
+
+    if (paciente) {
+      return paciente;
+    }
+
     const atual = await tx.orcamento.findUnique({
       where: { id },
       select: { situacao: true },
@@ -747,6 +829,12 @@ export function reabrir(
   usuarioId: number
 ): Promise<ResultadoDoOrcamento> {
   return emTransacao(async (tx) => {
+    const paciente = await travarPacienteAtivo(tx, id);
+
+    if (paciente) {
+      return paciente;
+    }
+
     const atual = await tx.orcamento.findUnique({
       where: { id },
       select: { situacao: true },

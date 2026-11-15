@@ -16,6 +16,8 @@ import consultasRouter from './routes/consultas.ts'
 import retornosRouter from './routes/retornos.ts'
 import contatosRetornoRouter from './routes/contatosRetorno.ts'
 import backupsRouter from './routes/backups.ts'
+import procedimentosRouter from './routes/procedimentos.ts'
+import orcamentosRouter from './routes/orcamentos.ts'
 
 import { Perfil } from '../generated/prisma/client.ts'
 
@@ -81,6 +83,8 @@ app.use('/dentistas', autenticado, exigirPerfilPorMetodo({
 app.use('/consultas', autenticado, consultasRouter)
 app.use('/retornos', autenticado, retornosRouter)
 app.use('/contatos-retorno', autenticado, contatosRetornoRouter)
+app.use('/procedimentos', autenticado, procedimentosRouter)
+app.use('/orcamentos', autenticado, orcamentosRouter)
 app.use('/historico-visitas', protegidoSomenteDono, historicoVisitasRouter)
 app.use('/configuracoes', protegidoSomenteDono, configuracoesRouter)
 app.use('/backups', protegidoSomenteDono, backupsRouter)

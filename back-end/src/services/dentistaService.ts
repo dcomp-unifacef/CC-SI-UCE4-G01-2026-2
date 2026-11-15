@@ -1,4 +1,5 @@
 import * as repository from "../repositories/dentistaRepository.ts";
+import * as orcamentoRepository from "../repositories/orcamentoRepository.ts";
 
 import type { Dentista } from "../../generated/prisma/client.ts";
 import type { CreateDentistaDto } from "../dto/dentista/createDentistaDto.ts";
@@ -22,6 +23,10 @@ const MENSAGEM_COM_VISITAS =
 
 const MENSAGEM_COM_CONSULTAS =
   "Dentista possui consultas na agenda e não pode ser excluído. Desative o cadastro.";
+
+
+const MENSAGEM_COM_ORCAMENTOS =
+  "Dentista possui orçamentos vinculados e não pode ser excluído. Desative o cadastro.";
 
 
 export async function findAll(): Promise<Dentista[]> {
@@ -84,11 +89,19 @@ export async function remove(
     throw new ConflictError(MENSAGEM_COM_CONSULTAS);
   }
 
+  if (await orcamentoRepository.countByDentista(id) > 0) {
+    throw new ConflictError(MENSAGEM_COM_ORCAMENTOS);
+  }
+
   try {
     return await repository.remove(id);
   }
   catch (error) {
     if (erroPrisma(error, "P2003")) {
+      if (await orcamentoRepository.countByDentista(id) > 0) {
+        throw new ConflictError(MENSAGEM_COM_ORCAMENTOS);
+      }
+
       throw new ConflictError(MENSAGEM_COM_CONSULTAS);
     }
 
