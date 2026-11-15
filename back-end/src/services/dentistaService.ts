@@ -20,6 +20,10 @@ const MENSAGEM_COM_VISITAS =
   "Dentista possui histórico de visitas e não pode ser excluído. Desative o cadastro.";
 
 
+const MENSAGEM_COM_CONSULTAS =
+  "Dentista possui consultas na agenda e não pode ser excluído. Desative o cadastro.";
+
+
 export async function findAll(): Promise<Dentista[]> {
   return repository.findAll();
 }
@@ -76,12 +80,16 @@ export async function remove(
     throw new ConflictError(MENSAGEM_COM_VISITAS);
   }
 
+  if (await repository.countConsultas(id) > 0) {
+    throw new ConflictError(MENSAGEM_COM_CONSULTAS);
+  }
+
   try {
     return await repository.remove(id);
   }
   catch (error) {
     if (erroPrisma(error, "P2003")) {
-      throw new ConflictError(MENSAGEM_COM_VISITAS);
+      throw new ConflictError(MENSAGEM_COM_CONSULTAS);
     }
 
     throw error;

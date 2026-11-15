@@ -1,5 +1,6 @@
 import * as repository from "../repositories/pacienteRepository.ts";
 
+import { StatusConsulta } from "../../generated/prisma/client.ts";
 import type { Paciente } from "../../generated/prisma/client.ts";
 import type { CreatePacienteDto } from "../dto/paciente/createPacienteDto.ts";
 import type { UpdatePacienteDto } from "../dto/paciente/updatePacienteDto.ts";
@@ -26,6 +27,10 @@ import type { Corpo } from "../utils/validators.ts";
 const MENSAGEM_CPF_DUPLICADO = "Já existe um paciente cadastrado com este CPF.";
 const MENSAGEM_COM_VISITAS =
   "Paciente possui histórico de visitas e não pode ser excluído. Desative o cadastro.";
+const MENSAGEM_COM_CONSULTAS =
+  "Paciente possui consultas na agenda e não pode ser excluído. Desative o cadastro.";
+const MENSAGEM_COM_CONSULTA_FUTURA =
+  "Paciente possui consulta futura agendada ou confirmada e não pode ser desativado.";
 
 
 function lerUf(corpo: Corpo): string | null | undefined {
@@ -137,7 +142,7 @@ export async function update(
   id: number,
   data: UpdatePacienteDto
 ): Promise<Paciente> {
-  await findById(id);
+  const atual = await findById(id);
 
   const corpo = exigirCorpo(data);
 
@@ -163,6 +168,20 @@ export async function update(
   alteracoes.email = lerEmail(corpo);
   alteracoes.ativo = booleanoOpcional(corpo, "ativo");
 
+  if (alteracoes.ativo === false && atual.ativo) {
+    const resultado = await repository.desativarSeSemConsultaFutura(
+      id,
+      new Date(),
+      [StatusConsulta.AGENDADA, StatusConsulta.CONFIRMADA]
+    );
+
+    if (resultado.situacao === "com_consulta_futura") {
+      throw new ConflictError(MENSAGEM_COM_CONSULTA_FUTURA);
+    }
+
+    alteracoes.ativo = undefined;
+  }
+
   return repository.update(id, alteracoes);
 }
 
@@ -174,6 +193,10 @@ export async function remove(
 
   if (await repository.countVisitas(id) > 0) {
     throw new ConflictError(MENSAGEM_COM_VISITAS);
+  }
+
+  if (await repository.countConsultas(id) > 0) {
+    throw new ConflictError(MENSAGEM_COM_CONSULTAS);
   }
 
   try {

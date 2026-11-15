@@ -30,6 +30,13 @@ export function countVisitas(id: number) {
 }
 
 
+export function countConsultas(id: number) {
+  return prisma.consulta.count({
+    where: { dentista_id: id },
+  });
+}
+
+
 export function create(data: CreateDentistaDto) {
   return prisma.dentista.create({
     data,

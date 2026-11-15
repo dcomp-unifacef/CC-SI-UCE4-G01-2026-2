@@ -12,12 +12,14 @@ import historicoVisitasRouter from './routes/historicoVisitas.ts'
 import sessoesRouter from './routes/sessoes.ts'
 import usuariosRouter from './routes/usuarios.ts'
 import configuracoesRouter from './routes/configuracoes.ts'
+import consultasRouter from './routes/consultas.ts'
 
 import { Perfil } from '../generated/prisma/client.ts'
 
 import { autenticar } from './middlewares/autenticar.ts'
 import { errorHandler } from './middlewares/errorHandler.ts'
 import { exigirPerfil } from './middlewares/exigirPerfil.ts'
+import { exigirPerfilPorMetodo } from './middlewares/exigirPerfilPorMetodo.ts'
 import { verificarOrigem } from './middlewares/verificarOrigem.ts'
 
 const app = express()
@@ -54,8 +56,26 @@ const protegidoSomenteDono = [
   exigirPerfil(Perfil.DONO),
 ]
 
-app.use('/pacientes', protegidoSomenteDono, pacientesRouter)
-app.use('/dentistas', protegidoSomenteDono, dentistasRouter)
+const autenticado = [
+  verificarOrigem(allowedOrigins),
+  autenticar,
+]
+
+app.use('/pacientes', autenticado, exigirPerfilPorMetodo({
+  GET: [Perfil.DONO, Perfil.SECRETARIA, Perfil.DENTISTA],
+  POST: [Perfil.DONO, Perfil.SECRETARIA],
+  PATCH: [Perfil.DONO, Perfil.SECRETARIA],
+  DELETE: [Perfil.DONO],
+}), pacientesRouter)
+
+app.use('/dentistas', autenticado, exigirPerfilPorMetodo({
+  GET: [Perfil.DONO, Perfil.SECRETARIA, Perfil.DENTISTA],
+  POST: [Perfil.DONO],
+  PATCH: [Perfil.DONO],
+  DELETE: [Perfil.DONO],
+}), dentistasRouter)
+
+app.use('/consultas', autenticado, consultasRouter)
 app.use('/historico-visitas', protegidoSomenteDono, historicoVisitasRouter)
 app.use('/configuracoes', protegidoSomenteDono, configuracoesRouter)
 

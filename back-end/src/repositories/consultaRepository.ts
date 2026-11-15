@@ -46,6 +46,7 @@ export type ConsultaCompleta = NonNullable<Awaited<ReturnType<typeof buscar>>>;
 export type ResultadoDaAlteracao =
   | { situacao: "alterada"; consulta: ConsultaCompleta }
   | { situacao: "nao_encontrada" }
+  | { situacao: "paciente_inativo" }
   | { situacao: "sem_mudanca" }
   | { situacao: "alterada_por_outra_operacao" };
 
@@ -131,7 +132,16 @@ export function criarComHistorico(
   data: CreateConsultaDto,
   usuarioId: number
 ) {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx): Promise<ConsultaCompleta | null> => {
+    const trava = await tx.paciente.updateMany({
+      where: { id: data.paciente_id, ativo: true },
+      data: { ativo: true },
+    });
+
+    if (trava.count !== 1) {
+      return null;
+    }
+
     const consulta = await tx.consulta.create({
       data: {
         paciente_id: data.paciente_id,
@@ -164,12 +174,13 @@ export function mudarStatus(
   id: number,
   novoStatus: StatusConsulta,
   usuarioId: number,
-  motivo?: string | null
+  motivo?: string | null,
+  exigirPacienteAtivo = false
 ) {
   return prisma.$transaction(async (tx): Promise<ResultadoDaAlteracao> => {
     const atual = await tx.consulta.findUnique({
       where: { id },
-      select: { status: true },
+      select: { status: true, paciente_id: true },
     });
 
     if (!atual) {
@@ -178,6 +189,17 @@ export function mudarStatus(
 
     if (atual.status === novoStatus) {
       return { situacao: "sem_mudanca" };
+    }
+
+    if (exigirPacienteAtivo) {
+      const trava = await tx.paciente.updateMany({
+        where: { id: atual.paciente_id, ativo: true },
+        data: { ativo: true },
+      });
+
+      if (trava.count !== 1) {
+        return { situacao: "paciente_inativo" };
+      }
     }
 
     const { count } = await tx.consulta.updateMany({
@@ -219,11 +241,25 @@ export function reagendar(
   return prisma.$transaction(async (tx): Promise<ResultadoDaAlteracao> => {
     const atual = await tx.consulta.findUnique({
       where: { id },
-      select: { status: true, inicio_em: true, duracao_min: true },
+      select: {
+        status: true,
+        inicio_em: true,
+        duracao_min: true,
+        paciente_id: true,
+      },
     });
 
     if (!atual) {
       return { situacao: "nao_encontrada" };
+    }
+
+    const trava = await tx.paciente.updateMany({
+      where: { id: atual.paciente_id, ativo: true },
+      data: { ativo: true },
+    });
+
+    if (trava.count !== 1) {
+      return { situacao: "paciente_inativo" };
     }
 
     if (

@@ -1,5 +1,7 @@
 import { prisma } from "../database/client.ts";
 
+import type { StatusConsulta } from "../../generated/prisma/client.ts";
+
 import type { CreatePacienteDto }
   from "../dto/paciente/createPacienteDto.ts";
 
@@ -33,6 +35,56 @@ export function findByCpf(cpf: string) {
 export function countVisitas(id: number) {
   return prisma.historicoVisita.count({
     where: { paciente_id: id },
+  });
+}
+
+
+export function countConsultas(id: number) {
+  return prisma.consulta.count({
+    where: { paciente_id: id },
+  });
+}
+
+
+export type ResultadoDaDesativacao =
+  | { situacao: "desativado" }
+  | { situacao: "nao_aplicavel" }
+  | { situacao: "com_consulta_futura" };
+
+
+export function desativarSeSemConsultaFutura(
+  id: number,
+  agora: Date,
+  status: StatusConsulta[]
+) {
+  return prisma.$transaction(async (tx): Promise<ResultadoDaDesativacao> => {
+    const trava = await tx.paciente.updateMany({
+      where: { id, ativo: true },
+      data: { ativo: true },
+    });
+
+    if (trava.count !== 1) {
+      return { situacao: "nao_aplicavel" };
+    }
+
+    const futuras = await tx.consulta.count({
+      where: {
+        paciente_id: id,
+        inicio_em: { gt: agora },
+        status: { in: status },
+      },
+    });
+
+    if (futuras > 0) {
+      return { situacao: "com_consulta_futura" };
+    }
+
+    await tx.paciente.update({
+      where: { id },
+      data: { ativo: false },
+    });
+
+    return { situacao: "desativado" };
   });
 }
 
