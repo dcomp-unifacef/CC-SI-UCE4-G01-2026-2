@@ -18,44 +18,46 @@ datasource db {
  * deve estar no singular
 */
 model Paciente {
-  id              Int      @id @default(autoincrement()) // Chave primária, autoincremental
-  nome            String   // Nome completo do paciente
-  cpf             String   @unique // CPF (somente números)
-  data_nascimento DateTime @db.Date // Data de nascimento (obrigatória)
-  logradouro      String?  // Rua/avenida do endereço
-  numero          String?  // Número da casa
-  complemento     String?  // Complemento do endereço (opcional)
-  bairro          String?  // Bairro
-  municipio       String?  // Município
-  uf              String?  @db.Char(2) // UF
-  telefone        String   // Telefone/celular
-  email           String?  // E-mail (opcional)
-  ativo           Boolean  @default(true) // Desativação lógica (US15)
+  id              Int               @id @default(autoincrement()) // Chave primária, autoincremental
+  nome            String // Nome completo do paciente
+  cpf             String            @unique // CPF (somente números)
+  data_nascimento DateTime          @db.Date // Data de nascimento (obrigatória)
+  logradouro      String? // Rua/avenida do endereço
+  numero          String? // Número da casa
+  complemento     String? // Complemento do endereço (opcional)
+  bairro          String? // Bairro
+  municipio       String? // Município
+  uf              String?           @db.Char(2) // UF
+  telefone        String // Telefone/celular
+  email           String? // E-mail (opcional)
+  ativo           Boolean           @default(true) // Desativação lógica (US15)
   visitas         HistoricoVisita[] // Lista virtual: visitas do paciente (lado 1)
   consultas       Consulta[]
   retornos        Retorno[]
   contatosRetorno ContatoRetorno[]
+  orcamentos      Orcamento[]
 }
 
 model Dentista {
-  id    Int     @id @default(autoincrement())
-  nome  String
-  ativo Boolean @default(true)
-  visitas HistoricoVisita[]
+  id        Int               @id @default(autoincrement())
+  nome      String
+  ativo     Boolean           @default(true)
+  visitas   HistoricoVisita[]
   consultas Consulta[]
+  orcamentos Orcamento[]
 }
 
 model HistoricoVisita {
-  id              Int      @id @default(autoincrement()) // Chave primária, autoincremental
-  data_visita     DateTime @db.Date // Data em que o atendimento foi realizado
-  procedimento    String   // Procedimento realizado
-  observacoes     String?  // Observações clínicas (opcional)
-  registro_antigo Boolean  @default(false)
-  paciente_id     Int      // Chave estrangeira (obrigatória)
-  paciente        Paciente @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
-  dentista_id     Int      // Dentista responsável pelo atendimento
-  dentista        Dentista @relation(fields: [dentista_id], references: [id], onDelete: Restrict)
-  consulta_id     Int?     @unique
+  id              Int       @id @default(autoincrement()) // Chave primária, autoincremental
+  data_visita     DateTime  @db.Date // Data em que o atendimento foi realizado
+  procedimento    String // Procedimento realizado
+  observacoes     String? // Observações clínicas (opcional)
+  registro_antigo Boolean   @default(false)
+  paciente_id     Int // Chave estrangeira (obrigatória)
+  paciente        Paciente  @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
+  dentista_id     Int // Dentista responsável pelo atendimento
+  dentista        Dentista  @relation(fields: [dentista_id], references: [id], onDelete: Restrict)
+  consulta_id     Int?      @unique
   consulta        Consulta? @relation(fields: [consulta_id], references: [id], onDelete: Restrict)
   retornos        Retorno[]
 }
@@ -67,24 +69,27 @@ enum Perfil {
 }
 
 model Usuario {
-  id                Int       @id @default(autoincrement())
-  nome              String
-  login             String    @unique
-  senha_hash        String
-  perfil            Perfil
-  ativo             Boolean   @default(true)
-  tentativas_falhas Int       @default(0)
-  bloqueado_ate     DateTime? @db.Timestamptz(3)
-  criado_em         DateTime  @default(now()) @db.Timestamptz(3)
-  atualizado_em     DateTime  @updatedAt @db.Timestamptz(3)
-  sessoes           Sessao[]
-  configuracoes     Configuracao[]
-  historicosConsulta HistoricoConsulta[]
-  retornosEncerrados Retorno[]
-  historicosRetorno  HistoricoRetorno[]
-  contatosRetorno    ContatoRetorno[]
-  backupsSolicitados BackupExecucao[] @relation("BackupSolicitadoPor")
-  backupsVistos      BackupExecucao[] @relation("BackupAvisoVistoPor")
+  id                  Int                  @id @default(autoincrement())
+  nome                String
+  login               String               @unique
+  senha_hash          String
+  perfil              Perfil
+  ativo               Boolean              @default(true)
+  tentativas_falhas   Int                  @default(0)
+  bloqueado_ate       DateTime?            @db.Timestamptz(3)
+  criado_em           DateTime             @default(now()) @db.Timestamptz(3)
+  atualizado_em       DateTime             @updatedAt @db.Timestamptz(3)
+  sessoes             Sessao[]
+  configuracoes       Configuracao[]
+  historicosConsulta  HistoricoConsulta[]
+  retornosEncerrados  Retorno[]
+  historicosRetorno   HistoricoRetorno[]
+  contatosRetorno     ContatoRetorno[]
+  backupsSolicitados  BackupExecucao[]     @relation("BackupSolicitadoPor")
+  backupsVistos       BackupExecucao[]     @relation("BackupAvisoVistoPor")
+  orcamentosCriados   Orcamento[]          @relation("OrcamentoCriadoPor")
+  orcamentosDecididos Orcamento[]          @relation("OrcamentoDecididoPor")
+  historicosOrcamento HistoricoOrcamento[]
 }
 
 model Configuracao {
@@ -120,18 +125,18 @@ enum StatusConsulta {
 }
 
 model Consulta {
-  id            Int            @id @default(autoincrement())
+  id            Int                 @id @default(autoincrement())
   paciente_id   Int
-  paciente      Paciente       @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
+  paciente      Paciente            @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
   dentista_id   Int
-  dentista      Dentista       @relation(fields: [dentista_id], references: [id], onDelete: Restrict)
-  inicio_em     DateTime       @db.Timestamptz(3)
+  dentista      Dentista            @relation(fields: [dentista_id], references: [id], onDelete: Restrict)
+  inicio_em     DateTime            @db.Timestamptz(3)
   duracao_min   Int
-  fim_em        DateTime       @db.Timestamptz(3)
-  status        StatusConsulta @default(AGENDADA)
-  encaixe       Boolean        @default(false)
-  criada_em     DateTime       @default(now()) @db.Timestamptz(3)
-  atualizada_em DateTime       @updatedAt @db.Timestamptz(3)
+  fim_em        DateTime            @db.Timestamptz(3)
+  status        StatusConsulta      @default(AGENDADA)
+  encaixe       Boolean             @default(false)
+  criada_em     DateTime            @default(now()) @db.Timestamptz(3)
+  atualizada_em DateTime            @updatedAt @db.Timestamptz(3)
   historico     HistoricoConsulta[]
   visita        HistoricoVisita?
 
@@ -178,17 +183,17 @@ enum TipoHistoricoRetorno {
 }
 
 model Retorno {
-  id               Int             @id @default(autoincrement())
+  id               Int                @id @default(autoincrement())
   paciente_id      Int
-  paciente         Paciente        @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
+  paciente         Paciente           @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
   visita_origem_id Int
-  visita_origem    HistoricoVisita @relation(fields: [visita_origem_id], references: [id], onDelete: Restrict)
-  data_prevista    DateTime        @db.Date
-  situacao         SituacaoRetorno @default(ABERTO)
-  criado_em        DateTime        @default(now()) @db.Timestamptz(3)
-  encerrado_em     DateTime?       @db.Timestamptz(3)
+  visita_origem    HistoricoVisita    @relation(fields: [visita_origem_id], references: [id], onDelete: Restrict)
+  data_prevista    DateTime           @db.Date
+  situacao         SituacaoRetorno    @default(ABERTO)
+  criado_em        DateTime           @default(now()) @db.Timestamptz(3)
+  encerrado_em     DateTime?          @db.Timestamptz(3)
   encerrado_por_id Int?
-  encerrado_por    Usuario?        @relation(fields: [encerrado_por_id], references: [id], onDelete: Restrict)
+  encerrado_por    Usuario?           @relation(fields: [encerrado_por_id], references: [id], onDelete: Restrict)
   motivo_descarte  String?
   historico        HistoricoRetorno[]
 
@@ -244,24 +249,105 @@ enum OrigemBackup {
 }
 
 model BackupExecucao {
-  id                 Int            @id @default(autoincrement())
-  origem             OrigemBackup
-  situacao           SituacaoBackup @default(EM_ANDAMENTO)
-  data_referencia    DateTime?      @db.Date
-  iniciado_em        DateTime       @default(now()) @db.Timestamptz(3)
-  ultimo_sinal_em    DateTime       @default(now()) @db.Timestamptz(3)
-  finalizado_em      DateTime?      @db.Timestamptz(3)
-  arquivo            String?        @unique
-  tamanho_bytes      BigInt?
-  sha256             String?
-  arquivo_removido_em DateTime?     @db.Timestamptz(3)
-  erro               String?
-  solicitado_por_id  Int?
-  solicitado_por     Usuario?       @relation("BackupSolicitadoPor", fields: [solicitado_por_id], references: [id], onDelete: Restrict)
-  aviso_visto_em     DateTime?      @db.Timestamptz(3)
-  aviso_visto_por_id Int?
-  aviso_visto_por    Usuario?       @relation("BackupAvisoVistoPor", fields: [aviso_visto_por_id], references: [id], onDelete: Restrict)
+  id                  Int            @id @default(autoincrement())
+  origem              OrigemBackup
+  situacao            SituacaoBackup @default(EM_ANDAMENTO)
+  data_referencia     DateTime?      @db.Date
+  iniciado_em         DateTime       @default(now()) @db.Timestamptz(3)
+  ultimo_sinal_em     DateTime       @default(now()) @db.Timestamptz(3)
+  finalizado_em       DateTime?      @db.Timestamptz(3)
+  arquivo             String?        @unique
+  tamanho_bytes       BigInt?
+  sha256              String?
+  arquivo_removido_em DateTime?      @db.Timestamptz(3)
+  erro                String?
+  solicitado_por_id   Int?
+  solicitado_por      Usuario?       @relation("BackupSolicitadoPor", fields: [solicitado_por_id], references: [id], onDelete: Restrict)
+  aviso_visto_em      DateTime?      @db.Timestamptz(3)
+  aviso_visto_por_id  Int?
+  aviso_visto_por     Usuario?       @relation("BackupAvisoVistoPor", fields: [aviso_visto_por_id], references: [id], onDelete: Restrict)
 
   @@index([iniciado_em])
   @@index([situacao, finalizado_em])
+}
+
+model Procedimento {
+  id             Int             @id @default(autoincrement())
+  nome           String
+  valor_centavos Int
+  ativo          Boolean         @default(true)
+  criado_em      DateTime        @default(now()) @db.Timestamptz(3)
+  atualizado_em  DateTime        @updatedAt @db.Timestamptz(3)
+  itensOrcamento ItemOrcamento[]
+
+  @@index([ativo, nome])
+}
+
+enum SituacaoOrcamento {
+  PENDENTE
+  APROVADO
+  RECUSADO
+}
+
+enum TipoHistoricoOrcamento {
+  CRIACAO
+  ALTERACAO
+  DECISAO
+  CORRECAO
+  REABERTURA
+}
+
+model Orcamento {
+  id              Int                  @id @default(autoincrement())
+  paciente_id     Int
+  paciente        Paciente             @relation(fields: [paciente_id], references: [id], onDelete: Restrict)
+  dentista_id     Int?
+  dentista        Dentista?            @relation(fields: [dentista_id], references: [id], onDelete: Restrict)
+  situacao        SituacaoOrcamento    @default(PENDENTE)
+  total_centavos  Int                  @default(0)
+  valido_ate      DateTime?            @db.Date
+  criado_em       DateTime             @default(now()) @db.Timestamptz(3)
+  atualizado_em   DateTime             @updatedAt @db.Timestamptz(3)
+  criado_por_id   Int
+  criado_por      Usuario              @relation("OrcamentoCriadoPor", fields: [criado_por_id], references: [id], onDelete: Restrict)
+  decidido_em     DateTime?            @db.Timestamptz(3)
+  decidido_por_id Int?
+  decidido_por    Usuario?             @relation("OrcamentoDecididoPor", fields: [decidido_por_id], references: [id], onDelete: Restrict)
+  itens           ItemOrcamento[]
+  historico       HistoricoOrcamento[]
+
+  @@index([paciente_id, criado_em])
+  @@index([situacao])
+}
+
+model ItemOrcamento {
+  id                      Int          @id @default(autoincrement())
+  orcamento_id            Int
+  orcamento               Orcamento    @relation(fields: [orcamento_id], references: [id], onDelete: Restrict)
+  procedimento_id         Int
+  procedimento            Procedimento @relation(fields: [procedimento_id], references: [id], onDelete: Restrict)
+  nome_procedimento       String
+  valor_unitario_centavos Int
+  quantidade              Int
+  criado_em               DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([orcamento_id])
+  @@index([procedimento_id])
+}
+
+model HistoricoOrcamento {
+  id                      Int                    @id @default(autoincrement())
+  orcamento_id            Int
+  orcamento               Orcamento              @relation(fields: [orcamento_id], references: [id], onDelete: Restrict)
+  tipo                    TipoHistoricoOrcamento
+  situacao_anterior       SituacaoOrcamento?
+  situacao_nova           SituacaoOrcamento
+  total_anterior_centavos Int?
+  total_novo_centavos     Int?
+  motivo                  String?
+  usuario_id              Int
+  usuario                 Usuario                @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  registrado_em           DateTime               @default(now()) @db.Timestamptz(3)
+
+  @@index([orcamento_id])
 }
