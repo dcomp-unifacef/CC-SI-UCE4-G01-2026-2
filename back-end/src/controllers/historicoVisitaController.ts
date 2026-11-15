@@ -37,7 +37,7 @@ export async function retrieveAll(
   next: NextFunction
 ): Promise<void> {
   try {
-    const visitas = await service.findAll();
+    const visitas = await service.listar(res.locals.usuario);
 
 
     res.json(visitas);
@@ -57,7 +57,7 @@ export async function retrieveOne(
     const id = Number(req.params.id);
 
 
-    const visita = await service.findById(id);
+    const visita = await service.consultar(id, res.locals.usuario);
 
 
     res.json(visita);

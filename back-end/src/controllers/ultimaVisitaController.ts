@@ -17,7 +17,10 @@ export async function retrieve(
   next: NextFunction
 ): Promise<void> {
   try {
-    const resposta = await service.ultimaVisita(Number(req.params.id));
+    const resposta = await service.consultarUltimaVisita(
+      Number(req.params.id),
+      res.locals.usuario
+    );
 
 
     res.json(resposta);

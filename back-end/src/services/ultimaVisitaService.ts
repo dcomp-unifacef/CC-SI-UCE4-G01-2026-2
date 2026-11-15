@@ -1,5 +1,10 @@
 import * as visitaRepository from "../repositories/historicoVisitaRepository.ts";
 import * as pacienteRepository from "../repositories/pacienteRepository.ts";
+import * as acessoService from "./acessoService.ts";
+
+import { TipoAcessoPaciente } from "../../generated/prisma/client.ts";
+
+import type { UsuarioAutenticado } from "./consultaService.ts";
 
 import type { UltimaVisitaRespostaDto } from "../dto/historicoVisita/ultimaVisitaRespostaDto.ts";
 
@@ -13,6 +18,18 @@ import {
   subtrairMeses,
 } from "../utils/datas.ts";
 import { hoje, validarId } from "../utils/validators.ts";
+
+
+export async function consultarUltimaVisita(
+  paciente_id: number,
+  usuario: UsuarioAutenticado
+): Promise<UltimaVisitaRespostaDto> {
+  const resposta = await ultimaVisita(paciente_id);
+
+  await acessoService.registrar(usuario, TipoAcessoPaciente.VISITA, paciente_id);
+
+  return resposta;
+}
 
 
 export async function ultimaVisita(

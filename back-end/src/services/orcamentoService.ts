@@ -1,7 +1,12 @@
 import * as repository from "../repositories/orcamentoRepository.ts";
 import * as pacienteRepository from "../repositories/pacienteRepository.ts";
+import * as acessoService from "./acessoService.ts";
 
-import { Perfil, SituacaoOrcamento } from "../../generated/prisma/client.ts";
+import {
+  Perfil,
+  SituacaoOrcamento,
+  TipoAcessoPaciente,
+} from "../../generated/prisma/client.ts";
 
 import type {
   HistoricoDoOrcamento,
@@ -293,7 +298,8 @@ async function buscarOuFalhar(id: number): Promise<OrcamentoCompleto> {
 
 
 export async function findByPaciente(
-  query: Record<string, unknown>
+  query: Record<string, unknown>,
+  usuario: UsuarioAutenticado
 ): Promise<OrcamentoResumoRespostaDto[]> {
   const paciente_id = idDaQuery(query, "paciente_id");
 
@@ -323,6 +329,14 @@ export async function findByPaciente(
 
   const orcamentos = await repository.findByPaciente(paciente_id, situacao);
 
+  if (orcamentos.length > 0) {
+    await acessoService.registrar(
+      usuario,
+      TipoAcessoPaciente.ORCAMENTO,
+      paciente_id
+    );
+  }
+
   return orcamentos.map(paraResumo);
 }
 
@@ -332,14 +346,36 @@ export async function findById(id: number): Promise<OrcamentoRespostaDto> {
 }
 
 
+export async function consultar(
+  id: number,
+  usuario: UsuarioAutenticado
+): Promise<OrcamentoRespostaDto> {
+  const orcamento = await buscarOuFalhar(id);
+
+  await acessoService.registrar(
+    usuario,
+    TipoAcessoPaciente.ORCAMENTO,
+    orcamento.paciente.id
+  );
+
+  return paraResposta(orcamento);
+}
+
+
 export async function historico(
   id: number,
   usuario: UsuarioAutenticado
 ): Promise<HistoricoOrcamentoRespostaDto[]> {
-  await buscarOuFalhar(id);
+  const orcamento = await buscarOuFalhar(id);
 
   const registros = await repository.findHistorico(id);
   const incluirMotivo = podeVerMotivos(usuario);
+
+  await acessoService.registrar(
+    usuario,
+    TipoAcessoPaciente.ORCAMENTO,
+    orcamento.paciente.id
+  );
 
   return registros.map((registro) => paraHistorico(registro, incluirMotivo));
 }

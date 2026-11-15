@@ -121,6 +121,11 @@ async function limparCriados() {
   const pacientes = [...criados.pacientes];
   const dentistas = [...criados.dentistas];
 
+  if (usuarioTesteId > 0) {
+    await prisma.logAcesso.deleteMany({ where: { usuario_id: usuarioTesteId } });
+    await prisma.consentimentoPaciente.deleteMany({ where: { registrado_por_id: usuarioTesteId } });
+  }
+
   if (visitas.length > 0) await prisma.historicoVisita.deleteMany({ where: { id: { in: visitas } } });
   if (pacientes.length > 0) await prisma.paciente.deleteMany({ where: { id: { in: pacientes } } });
   if (dentistas.length > 0) await prisma.dentista.deleteMany({ where: { id: { in: dentistas } } });

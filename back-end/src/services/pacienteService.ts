@@ -1,7 +1,13 @@
 import * as repository from "../repositories/pacienteRepository.ts";
 import * as orcamentoRepository from "../repositories/orcamentoRepository.ts";
+import * as consentimentoRepository from "../repositories/consentimentoRepository.ts";
+import * as logAcessoRepository from "../repositories/logAcessoRepository.ts";
+import * as consentimentoService from "./consentimentoService.ts";
+import * as acessoService from "./acessoService.ts";
+import type { UsuarioAutenticado } from "./consultaService.ts";
+import type { PacienteComConsentimentoDto } from "../dto/paciente/pacienteComConsentimentoDto.ts";
 
-import { StatusConsulta } from "../../generated/prisma/client.ts";
+import { StatusConsulta, TipoAcessoPaciente } from "../../generated/prisma/client.ts";
 import type { Paciente } from "../../generated/prisma/client.ts";
 import type { CreatePacienteDto } from "../dto/paciente/createPacienteDto.ts";
 import type { UpdatePacienteDto } from "../dto/paciente/updatePacienteDto.ts";
@@ -33,6 +39,8 @@ const MENSAGEM_COM_CONSULTAS =
   "Paciente possui consultas na agenda e não pode ser excluído. Desative o cadastro.";
 const MENSAGEM_COM_ORCAMENTOS =
   "Paciente possui orçamentos e não pode ser excluído. Desative o cadastro.";
+const MENSAGEM_COM_REGISTROS =
+  "Paciente possui registros de consentimento ou de acesso e não pode ser excluído. Desative o cadastro.";
 const MENSAGEM_COM_CONSULTA_FUTURA =
   "Paciente possui consulta futura agendada ou confirmada e não pode ser desativado.";
 
@@ -143,6 +151,47 @@ export async function findById(
   }
 
   return paciente;
+}
+
+
+export async function consultar(
+  id: number,
+  usuario: UsuarioAutenticado
+): Promise<PacienteComConsentimentoDto> {
+  const paciente = await findById(id);
+
+  const consentimento = await consentimentoService.resumoDoPaciente(id);
+
+  await acessoService.registrar(usuario, TipoAcessoPaciente.FICHA, id);
+
+  return { ...paciente, consentimento };
+}
+
+
+export async function listar(
+  query: Record<string, unknown>,
+  usuario: UsuarioAutenticado
+): Promise<PacienteComConsentimentoDto[]> {
+  const pacientes = await findAll(query);
+
+  if (pacientes.length === 0) {
+    return [];
+  }
+
+  const ids = pacientes.map((paciente) => paciente.id);
+
+  const resumos = await consentimentoService.resumosDosPacientes(ids);
+
+  await acessoService.registrarLista(
+    usuario,
+    TipoAcessoPaciente.LISTA_PACIENTES,
+    ids
+  );
+
+  return pacientes.map((paciente) => ({
+    ...paciente,
+    consentimento: resumos.get(paciente.id)!,
+  }));
 }
 
 
@@ -261,6 +310,13 @@ export async function remove(
     throw new ConflictError(MENSAGEM_COM_ORCAMENTOS);
   }
 
+  if (
+    await consentimentoRepository.countByPaciente(id) > 0 ||
+    await logAcessoRepository.countByPaciente(id) > 0
+  ) {
+    throw new ConflictError(MENSAGEM_COM_REGISTROS);
+  }
+
   try {
     return await repository.remove(id);
   }
@@ -268,6 +324,13 @@ export async function remove(
     if (erroPrisma(error, "P2003")) {
       if (await orcamentoRepository.countByPaciente(id) > 0) {
         throw new ConflictError(MENSAGEM_COM_ORCAMENTOS);
+      }
+
+      if (
+        await consentimentoRepository.countByPaciente(id) > 0 ||
+        await logAcessoRepository.countByPaciente(id) > 0
+      ) {
+        throw new ConflictError(MENSAGEM_COM_REGISTROS);
       }
 
       throw new ConflictError(MENSAGEM_COM_VISITAS);

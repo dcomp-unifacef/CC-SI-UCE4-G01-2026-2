@@ -65,7 +65,8 @@ export async function index(
 ): Promise<void> {
   try {
     const orcamentos = await service.findByPaciente(
-      req.query as Record<string, unknown>
+      req.query as Record<string, unknown>,
+      res.locals.usuario
     );
 
 
@@ -83,7 +84,10 @@ export async function retrieve(
   next: NextFunction
 ): Promise<void> {
   try {
-    const orcamento = await service.findById(Number(req.params.id));
+    const orcamento = await service.consultar(
+      Number(req.params.id),
+      res.locals.usuario
+    );
 
 
     res.json(orcamento);
@@ -100,7 +104,10 @@ export async function pdf(
   next: NextFunction
 ): Promise<void> {
   try {
-    const arquivo = await pdfService.gerar(Number(req.params.id));
+    const arquivo = await pdfService.gerar(
+      Number(req.params.id),
+      res.locals.usuario
+    );
 
 
     res.setHeader("Content-Type", "application/pdf");

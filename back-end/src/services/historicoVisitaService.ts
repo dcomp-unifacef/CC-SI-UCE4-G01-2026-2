@@ -1,6 +1,11 @@
 import * as repository from "../repositories/historicoVisitaRepository.ts";
 import * as pacienteService from "./pacienteService.ts";
 import * as dentistaService from "./dentistaService.ts";
+import * as acessoService from "./acessoService.ts";
+
+import { TipoAcessoPaciente } from "../../generated/prisma/client.ts";
+
+import type { UsuarioAutenticado } from "./consultaService.ts";
 
 import type { HistoricoVisita } from "../../generated/prisma/client.ts";
 import type { CreateHistoricoVisitaDto } from "../dto/historicoVisita/createHistoricoVisitaDto.ts";
@@ -91,6 +96,36 @@ export async function findById(id: number) {
   if (!visita) {
     throw new NotFoundError("Visita não encontrada.");
   }
+
+  return visita;
+}
+
+
+export async function listar(usuario: UsuarioAutenticado) {
+  const visitas = await findAll();
+
+  if (visitas.length === 0) {
+    return visitas;
+  }
+
+  await acessoService.registrarLista(
+    usuario,
+    TipoAcessoPaciente.LISTA_VISITAS,
+    visitas.map((visita) => visita.paciente_id)
+  );
+
+  return visitas;
+}
+
+
+export async function consultar(id: number, usuario: UsuarioAutenticado) {
+  const visita = await findById(id);
+
+  await acessoService.registrar(
+    usuario,
+    TipoAcessoPaciente.VISITA,
+    visita.paciente_id
+  );
 
   return visita;
 }

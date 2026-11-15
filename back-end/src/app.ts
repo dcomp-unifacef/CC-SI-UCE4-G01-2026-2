@@ -18,6 +18,8 @@ import contatosRetornoRouter from './routes/contatosRetorno.ts'
 import backupsRouter from './routes/backups.ts'
 import procedimentosRouter from './routes/procedimentos.ts'
 import orcamentosRouter from './routes/orcamentos.ts'
+import consentimentosRouter from './routes/consentimentos.ts'
+import logsAcessoRouter from './routes/logsAcesso.ts'
 
 import { Perfil } from '../generated/prisma/client.ts'
 
@@ -85,6 +87,8 @@ app.use('/retornos', autenticado, retornosRouter)
 app.use('/contatos-retorno', autenticado, contatosRetornoRouter)
 app.use('/procedimentos', autenticado, procedimentosRouter)
 app.use('/orcamentos', autenticado, orcamentosRouter)
+app.use('/consentimentos', autenticado, consentimentosRouter)
+app.use('/logs-acesso', protegidoSomenteDono, logsAcessoRouter)
 app.use('/historico-visitas', protegidoSomenteDono, historicoVisitasRouter)
 app.use('/configuracoes', protegidoSomenteDono, configuracoesRouter)
 app.use('/backups', protegidoSomenteDono, backupsRouter)

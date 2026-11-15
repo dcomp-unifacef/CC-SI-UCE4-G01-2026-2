@@ -1,6 +1,11 @@
 import PDFDocument from "pdfkit";
 
 import * as orcamentoService from "./orcamentoService.ts";
+import * as acessoService from "./acessoService.ts";
+
+import { TipoAcessoPaciente } from "../../generated/prisma/client.ts";
+
+import type { UsuarioAutenticado } from "./consultaService.ts";
 
 import type { OrcamentoRespostaDto } from "../dto/orcamento/orcamentoRespostaDto.ts";
 
@@ -212,7 +217,10 @@ function desenhar(doc: PDFKit.PDFDocument, orcamento: OrcamentoRespostaDto): voi
 }
 
 
-export async function gerar(id: number): Promise<PdfDoOrcamento> {
+export async function gerar(
+  id: number,
+  usuario: UsuarioAutenticado
+): Promise<PdfDoOrcamento> {
   const orcamento = await orcamentoService.findById(id);
 
   const doc = new PDFDocument({
@@ -237,8 +245,16 @@ export async function gerar(id: number): Promise<PdfDoOrcamento> {
 
   doc.end();
 
+  const arquivo = await conteudo;
+
+  await acessoService.registrar(
+    usuario,
+    TipoAcessoPaciente.ORCAMENTO_PDF,
+    orcamento.paciente.id
+  );
+
   return {
     nomeDoArquivo: `orcamento-${orcamento.id}.pdf`,
-    conteudo: await conteudo,
+    conteudo: arquivo,
   };
 }

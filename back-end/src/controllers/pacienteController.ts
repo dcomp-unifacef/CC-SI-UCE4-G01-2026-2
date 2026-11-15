@@ -37,8 +37,9 @@ export async function retrieveAll(
   next: NextFunction
 ): Promise<void> {
   try {
-    const pacientes = await service.findAll(
-      req.query as Record<string, unknown>
+    const pacientes = await service.listar(
+      req.query as Record<string, unknown>,
+      res.locals.usuario
     );
 
 
@@ -59,7 +60,7 @@ export async function retrieveOne(
     const id = Number(req.params.id);
 
 
-    const paciente = await service.findById(id);
+    const paciente = await service.consultar(id, res.locals.usuario);
 
 
     res.json(paciente);
