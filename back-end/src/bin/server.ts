@@ -8,6 +8,7 @@ import app from '../app'
 import chalk from 'chalk'
 import { createServer } from 'http'
 import { ExpressError } from '../types/error'
+import { iniciarAgendador } from '../utils/agendadorBackup.ts'
 
 /**
  * Get port from environment and store in Express.
@@ -84,4 +85,5 @@ function onListening() {
   let addr = server.address()
   let bind = typeof addr === 'string' ? `pipe  ${addr}` : `port ${addr?.port}`
   console.log(chalk.cyan(`Listening on ${bind}.`))
+  iniciarAgendador()
 }

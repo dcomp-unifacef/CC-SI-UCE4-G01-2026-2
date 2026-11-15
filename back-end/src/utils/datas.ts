@@ -143,6 +143,43 @@ export function diaCivilNoConsultorio(instante: Date): Date {
 }
 
 
+const formatadorDeHorario = new Intl.DateTimeFormat('en-GB', {
+  timeZone: FUSO_DO_CONSULTORIO,
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+})
+
+const PADRAO_HORARIO = /^([01]\d|2[0-3]):([0-5]\d)$/
+
+
+export function minutosDoDiaNoConsultorio(instante: Date): number {
+  const partes = formatadorDeHorario.formatToParts(instante)
+  const hora = Number(partes.find((parte) => parte.type === 'hour')?.value ?? 0)
+  const minuto = Number(partes.find((parte) => parte.type === 'minute')?.value ?? 0)
+
+  return hora * 60 + minuto
+}
+
+
+export function converterHorario(valor: unknown): number | null {
+  if (typeof valor !== 'string') return null
+
+  const partes = PADRAO_HORARIO.exec(valor)
+  if (partes === null) return null
+
+  return Number(partes[1]) * 60 + Number(partes[2])
+}
+
+
+export function formatarHorario(minutos: number): string {
+  const hora = Math.floor(minutos / 60)
+  const minuto = minutos % 60
+
+  return `${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`
+}
+
+
 export function converterDia(valor: unknown): Date | null {
   if (typeof valor !== 'string') return null
 

@@ -8,6 +8,10 @@ import type {
 import * as service from "../services/sessaoService.ts";
 
 
+import * as backupService from "../services/backupService.ts";
+
+import { Perfil } from "../../generated/prisma/client.ts";
+
 import type { LoginDto } from "../dto/sessao/loginDto.ts";
 
 import {
@@ -35,9 +39,15 @@ export async function create(
 
     res.cookie(NOME_DO_COOKIE, sessao.token, opcoesDoCookie(sessao.duracaoEmMs));
 
+    const aviso_backup =
+      sessao.usuario.perfil === Perfil.DONO
+        ? await backupService.avisoParaLogin()
+        : null;
+
     res.status(201).json({
       usuario: sessao.usuario,
       expira_em: sessao.expira_em,
+      ...(aviso_backup ? { aviso_backup } : {}),
     });
   }
   catch (error) {

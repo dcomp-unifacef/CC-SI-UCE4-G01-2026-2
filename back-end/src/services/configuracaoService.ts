@@ -15,6 +15,8 @@ import {
   inteiroOpcional,
 } from "../utils/validators.ts";
 
+import { converterHorario, formatarHorario } from "../utils/datas.ts";
+
 
 const MENSAGEM_INTERNA = "Erro interno do servidor.";
 
@@ -47,6 +49,7 @@ function paraResposta(configuracao: Configuracao): ConfiguracaoRespostaDto {
     sessao_inatividade_min: configuracao.sessao_inatividade_min,
     sessao_duracao_max_min: configuracao.sessao_duracao_max_min,
     consulta_duracao_max_min: configuracao.consulta_duracao_max_min,
+    backup_horario: formatarHorario(configuracao.backup_horario_min),
     atualizado_em: configuracao.atualizado_em,
     atualizado_por_id: configuracao.atualizado_por_id,
   };
@@ -71,7 +74,9 @@ export async function update(
   const corpo = exigirCorpo(data);
 
   const desconhecido = Object.keys(corpo).find(
-    (chave) => !(CAMPOS as readonly string[]).includes(chave)
+    (chave) =>
+      !(CAMPOS as readonly string[]).includes(chave) &&
+      chave !== "backup_horario"
   );
 
   if (desconhecido !== undefined) {
@@ -94,6 +99,18 @@ export async function update(
     }
 
     alteracoes[campo] = valor;
+  }
+
+  if (corpo.backup_horario !== undefined) {
+    const minutos = converterHorario(corpo.backup_horario);
+
+    if (minutos === null) {
+      throw new BadRequestError(
+        'O campo "backup_horario" deve estar no formato HH:MM, de 00:00 a 23:59.'
+      );
+    }
+
+    alteracoes.backup_horario_min = minutos;
   }
 
   if (Object.keys(alteracoes).length === 0) {
