@@ -1,5 +1,7 @@
 import { prisma } from "../database/client.ts";
 
+import { travarItemParaVinculo } from "./procedimentoRepository.ts";
+
 import type { HistoricoVisita } from "../../generated/prisma/client.ts";
 
 import type { CreateHistoricoVisitaDto }
@@ -145,15 +147,50 @@ export async function contarVinculos(id: number) {
 }
 
 
+const OPCOES_TRANSACAO = { maxWait: 10_000, timeout: 20_000 };
+
+
+export type ProblemaDoVinculo =
+  | { situacao: "procedimento_inativo" }
+  | { situacao: "procedimento_inexistente" };
+
+
+function problemaDoItem(
+  situacao: "inativo" | "inexistente"
+): ProblemaDoVinculo {
+  return situacao === "inativo"
+    ? { situacao: "procedimento_inativo" }
+    : { situacao: "procedimento_inexistente" };
+}
+
+
+export type ResultadoDaCriacaoDaVisita =
+  | { situacao: "criada"; visita: HistoricoVisita }
+  | ProblemaDoVinculo;
+
+
 export function create(
   data: CreateHistoricoVisitaDto & {
     registro_antigo?: boolean;
     consulta_id?: number | null;
   }
 ) {
-  return prisma.historicoVisita.create({
-    data,
-  });
+  return prisma.$transaction(
+    async (tx): Promise<ResultadoDaCriacaoDaVisita> => {
+      if (data.procedimento_id !== undefined && data.procedimento_id !== null) {
+        const item = await travarItemParaVinculo(tx, data.procedimento_id);
+
+        if (item !== "ok") {
+          return problemaDoItem(item);
+        }
+      }
+
+      const visita = await tx.historicoVisita.create({ data });
+
+      return { situacao: "criada", visita };
+    },
+    OPCOES_TRANSACAO
+  );
 }
 
 
@@ -162,7 +199,8 @@ export type ResultadoDaTrocaDePaciente =
   | { situacao: "nao_encontrada" }
   | { situacao: "alterada_por_outra_operacao" }
   | { situacao: "com_retorno" }
-  | { situacao: "com_consulta" };
+  | { situacao: "com_consulta" }
+  | ProblemaDoVinculo;
 
 
 export function updateComTrocaDePaciente(
@@ -173,7 +211,7 @@ export function updateComTrocaDePaciente(
     async (tx): Promise<ResultadoDaTrocaDePaciente> => {
       const atual = await tx.historicoVisita.findUnique({
         where: { id },
-        select: { paciente_id: true },
+        select: { paciente_id: true, procedimento_id: true },
       });
 
       if (!atual) {
@@ -205,25 +243,65 @@ export function updateComTrocaDePaciente(
         return { situacao: "com_consulta" };
       }
 
+      if (
+        data.procedimento_id !== undefined &&
+        data.procedimento_id !== null &&
+        data.procedimento_id !== atual.procedimento_id
+      ) {
+        const item = await travarItemParaVinculo(tx, data.procedimento_id);
+
+        if (item !== "ok") {
+          return problemaDoItem(item);
+        }
+      }
+
       const visita = await tx.historicoVisita.update({
         where: { id },
         data,
       });
 
       return { situacao: "alterada", visita };
-    }
+    },
+    OPCOES_TRANSACAO
   );
 }
+
+
+export type ResultadoDaAtualizacaoDaVisita =
+  | { situacao: "alterada"; visita: HistoricoVisita }
+  | ProblemaDoVinculo;
 
 
 export function update(
   id: number,
   data: UpdateHistoricoVisitaDto
 ) {
-  return prisma.historicoVisita.update({
-    where: { id },
-    data,
-  });
+  return prisma.$transaction(
+    async (tx): Promise<ResultadoDaAtualizacaoDaVisita> => {
+      if (data.procedimento_id !== undefined && data.procedimento_id !== null) {
+        const atual = await tx.historicoVisita.findUnique({
+          where: { id },
+          select: { procedimento_id: true },
+        });
+
+        if (atual && atual.procedimento_id !== data.procedimento_id) {
+          const item = await travarItemParaVinculo(tx, data.procedimento_id);
+
+          if (item !== "ok") {
+            return problemaDoItem(item);
+          }
+        }
+      }
+
+      const visita = await tx.historicoVisita.update({
+        where: { id },
+        data,
+      });
+
+      return { situacao: "alterada", visita };
+    },
+    OPCOES_TRANSACAO
+  );
 }
 
 

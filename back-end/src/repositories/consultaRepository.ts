@@ -1,11 +1,15 @@
 import { prisma } from "../database/client.ts";
 
+import { travarItemParaVinculo } from "./procedimentoRepository.ts";
+
 import {
   SituacaoRetorno,
   StatusConsulta,
   TipoHistoricoConsulta,
   TipoHistoricoRetorno,
 } from "../../generated/prisma/client.ts";
+
+import type { Prisma } from "../../generated/prisma/client.ts";
 
 import type { CreateConsultaDto }
   from "../dto/consulta/createConsultaDto.ts";
@@ -49,8 +53,28 @@ export type ResultadoDaAlteracao =
   | { situacao: "alterada"; consulta: ConsultaCompleta }
   | { situacao: "nao_encontrada" }
   | { situacao: "paciente_inativo" }
+  | { situacao: "dentista_inativo" }
   | { situacao: "sem_mudanca" }
   | { situacao: "alterada_por_outra_operacao" };
+
+
+export type ResultadoDaCriacao =
+  | { situacao: "criada"; consulta: ConsultaCompleta }
+  | { situacao: "paciente_inativo" }
+  | { situacao: "dentista_inativo" };
+
+
+async function travarDentistaAtivo(
+  tx: Prisma.TransactionClient,
+  id: number
+): Promise<boolean> {
+  const trava = await tx.dentista.updateMany({
+    where: { id, ativo: true },
+    data: { ativo: true },
+  });
+
+  return trava.count === 1;
+}
 
 
 function calcularFim(inicio: Date, duracao_min: number): Date {
@@ -134,14 +158,18 @@ export function criarComHistorico(
   data: CreateConsultaDto,
   usuarioId: number
 ) {
-  return prisma.$transaction(async (tx): Promise<ConsultaCompleta | null> => {
+  return prisma.$transaction(async (tx): Promise<ResultadoDaCriacao> => {
     const trava = await tx.paciente.updateMany({
       where: { id: data.paciente_id, ativo: true },
       data: { ativo: true },
     });
 
     if (trava.count !== 1) {
-      return null;
+      return { situacao: "paciente_inativo" };
+    }
+
+    if (!(await travarDentistaAtivo(tx, data.dentista_id))) {
+      return { situacao: "dentista_inativo" };
     }
 
     const consulta = await tx.consulta.create({
@@ -167,7 +195,7 @@ export function criarComHistorico(
       },
     });
 
-    return consulta;
+    return { situacao: "criada", consulta };
   });
 }
 
@@ -178,12 +206,13 @@ export function mudarStatus(
   usuarioId: number,
   motivo?: string | null,
   exigirPacienteAtivo = false,
-  origensPermitidas?: StatusConsulta[]
+  origensPermitidas?: StatusConsulta[],
+  exigirDentistaAtivo = false
 ) {
   return prisma.$transaction(async (tx): Promise<ResultadoDaAlteracao> => {
     const atual = await tx.consulta.findUnique({
       where: { id },
-      select: { status: true, paciente_id: true },
+      select: { status: true, paciente_id: true, dentista_id: true },
     });
 
     if (!atual) {
@@ -206,6 +235,12 @@ export function mudarStatus(
 
       if (trava.count !== 1) {
         return { situacao: "paciente_inativo" };
+      }
+    }
+
+    if (exigirDentistaAtivo) {
+      if (!(await travarDentistaAtivo(tx, atual.dentista_id))) {
+        return { situacao: "dentista_inativo" };
       }
     }
 
@@ -242,6 +277,7 @@ export function mudarStatus(
 export interface DadosDaRealizacao {
   data_visita: Date;
   procedimento: string;
+  procedimento_id: number | null;
   observacoes: string | null;
   data_prevista_retorno: Date;
   motivo: string | null;
@@ -259,7 +295,9 @@ export type ResultadoDaRealizacao =
   | { situacao: "paciente_inativo" }
   | { situacao: "sem_mudanca" }
   | { situacao: "alterada_por_outra_operacao" }
-  | { situacao: "visita_ja_existe" };
+  | { situacao: "visita_ja_existe" }
+  | { situacao: "procedimento_inativo" }
+  | { situacao: "procedimento_inexistente" };
 
 
 function violouUnicidade(erro: unknown): boolean {
@@ -310,6 +348,18 @@ export async function realizarComVisita(
           return { situacao: "paciente_inativo" };
         }
 
+        if (dados.procedimento_id !== null) {
+          const item = await travarItemParaVinculo(tx, dados.procedimento_id);
+
+          if (item === "inativo") {
+            return { situacao: "procedimento_inativo" };
+          }
+
+          if (item === "inexistente") {
+            return { situacao: "procedimento_inexistente" };
+          }
+        }
+
         const { count } = await tx.consulta.updateMany({
           where: { id, status: atual.status },
           data: {
@@ -337,6 +387,7 @@ export async function realizarComVisita(
           data: {
             data_visita: dados.data_visita,
             procedimento: dados.procedimento,
+            procedimento_id: dados.procedimento_id,
             observacoes: dados.observacoes,
             paciente_id: atual.paciente_id,
             dentista_id: atual.dentista_id,
@@ -373,7 +424,8 @@ export async function realizarComVisita(
           visita_id: visita.id,
           retorno_id: retorno.id,
         };
-      }
+      },
+      { maxWait: 10_000, timeout: 20_000 }
     );
   }
   catch (erro) {
@@ -400,6 +452,7 @@ export function reagendar(
         inicio_em: true,
         duracao_min: true,
         paciente_id: true,
+        dentista_id: true,
       },
     });
 
@@ -414,6 +467,10 @@ export function reagendar(
 
     if (trava.count !== 1) {
       return { situacao: "paciente_inativo" };
+    }
+
+    if (!(await travarDentistaAtivo(tx, atual.dentista_id))) {
+      return { situacao: "dentista_inativo" };
     }
 
     if (

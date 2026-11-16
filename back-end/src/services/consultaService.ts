@@ -3,6 +3,7 @@ import * as historicoRepository from "../repositories/historicoConsultaRepositor
 import * as configuracaoRepository from "../repositories/configuracaoRepository.ts";
 import * as pacienteRepository from "../repositories/pacienteRepository.ts";
 import * as dentistaRepository from "../repositories/dentistaRepository.ts";
+import * as procedimentoService from "./procedimentoService.ts";
 
 import { Perfil, StatusConsulta } from "../../generated/prisma/client.ts";
 
@@ -52,6 +53,10 @@ const MENSAGEM_DATA_INVALIDA =
   "Data e hora inválidas. Use o formato ISO 8601 com fuso, por exemplo 2030-04-01T09:00:00-03:00.";
 const MENSAGEM_PACIENTE_DESATIVADO =
   "Paciente desativado não pode ter consulta na agenda.";
+const MENSAGEM_ITEM_INATIVO =
+  "Não é possível vincular a visita a um item desativado do catálogo.";
+const MENSAGEM_DENTISTA_DESATIVADO =
+  "Dentista desativado não pode receber consultas.";
 const MENSAGEM_HORARIO_INDISPONIVEL =
   "Horário indisponível para este dentista.";
 const MENSAGEM_ALTERADA_POR_OUTRA_OPERACAO =
@@ -60,7 +65,7 @@ const MENSAGEM_ALTERADA_POR_OUTRA_OPERACAO =
 const MENSAGEM_REALIZACAO_RESTRITA =
   "Somente o dono ou o dentista podem marcar a consulta como realizada.";
 const MENSAGEM_CAMPOS_DA_REALIZACAO =
-  'Os campos "procedimento", "observacoes" e "retorno_meses" só podem ser informados ao marcar a consulta como realizada.';
+  'Os campos "procedimento", "procedimento_id", "observacoes" e "retorno_meses" só podem ser informados ao marcar a consulta como realizada.';
 const MENSAGEM_RETORNO_MESES =
   'O campo "retorno_meses" deve ser 3, 6 ou 12.';
 const MENSAGEM_PACIENTE_SEM_VISITA =
@@ -68,7 +73,12 @@ const MENSAGEM_PACIENTE_SEM_VISITA =
 const MENSAGEM_VISITA_JA_EXISTE =
   "Já existe uma visita registrada para esta consulta.";
 
-const CAMPOS_DA_REALIZACAO = ["procedimento", "observacoes", "retorno_meses"];
+const CAMPOS_DA_REALIZACAO = [
+  "procedimento",
+  "procedimento_id",
+  "observacoes",
+  "retorno_meses",
+];
 const OPCOES_DE_RETORNO_EM_MESES = [3, 6, 12];
 const RETORNO_PADRAO_EM_MESES = 6;
 
@@ -166,10 +176,15 @@ function lerDataHora(corpo: Record<string, unknown>, campo: string): Date {
 
 function lerDadosDoAtendimento(corpo: Record<string, unknown>): {
   procedimento: string;
+  procedimento_id: number | null;
   observacoes: string | null;
   retorno_meses: number;
 } {
   const procedimento = textoObrigatorio(corpo, "procedimento");
+  const procedimento_id =
+    corpo.procedimento_id === null || corpo.procedimento_id === undefined
+      ? null
+      : inteiroObrigatorio(corpo, "procedimento_id");
   const observacoes = textoOpcional(corpo, "observacoes") ?? null;
   const retorno_meses =
     inteiroOpcional(corpo, "retorno_meses") ?? RETORNO_PADRAO_EM_MESES;
@@ -178,7 +193,7 @@ function lerDadosDoAtendimento(corpo: Record<string, unknown>): {
     throw new BadRequestError(MENSAGEM_RETORNO_MESES);
   }
 
-  return { procedimento, observacoes, retorno_meses };
+  return { procedimento, procedimento_id, observacoes, retorno_meses };
 }
 
 
@@ -406,7 +421,7 @@ export async function create(
   }
 
   if (!dentista.ativo) {
-    throw new BadRequestError("Dentista desativado não pode receber consultas.");
+    throw new BadRequestError(MENSAGEM_DENTISTA_DESATIVADO);
   }
 
   const fim_em = new Date(inicio_em.getTime() + duracao_min * 60 * 1000);
@@ -427,11 +442,15 @@ export async function create(
       usuario.id
     );
 
-    if (criada === null) {
+    if (criada.situacao === "paciente_inativo") {
       throw new BadRequestError(MENSAGEM_PACIENTE_DESATIVADO);
     }
 
-    return paraResposta(criada);
+    if (criada.situacao === "dentista_inativo") {
+      throw new BadRequestError(MENSAGEM_DENTISTA_DESATIVADO);
+    }
+
+    return paraResposta(criada.consulta);
   }
   catch (error) {
     if (violouExclusao(error)) {
@@ -519,6 +538,18 @@ export async function mudarStatus(
   }
 
   if (atendimento !== null) {
+    if (atendimento.procedimento_id !== null) {
+      validarId(atendimento.procedimento_id);
+
+      const item = await procedimentoService.findById(
+        atendimento.procedimento_id
+      );
+
+      if (!item.ativo) {
+        throw new BadRequestError(MENSAGEM_ITEM_INATIVO);
+      }
+    }
+
     const data_visita = diaCivilNoConsultorio(consulta.inicio_em);
     const data_prevista_retorno = somarMeses(
       data_visita,
@@ -530,6 +561,7 @@ export async function mudarStatus(
       {
         data_visita,
         procedimento: atendimento.procedimento,
+        procedimento_id: atendimento.procedimento_id,
         observacoes: atendimento.observacoes,
         data_prevista_retorno,
         motivo: motivo ?? null,
@@ -564,6 +596,10 @@ export async function mudarStatus(
         throw new ConflictError(MENSAGEM_ALTERADA_POR_OUTRA_OPERACAO);
       case "visita_ja_existe":
         throw new ConflictError(MENSAGEM_VISITA_JA_EXISTE);
+      case "procedimento_inativo":
+        throw new BadRequestError(MENSAGEM_ITEM_INATIVO);
+      case "procedimento_inexistente":
+        throw new NotFoundError("Procedimento não encontrado.");
     }
   }
 
@@ -581,7 +617,7 @@ export async function mudarStatus(
     const dentista = await dentistaRepository.findById(consulta.dentista.id);
 
     if (!dentista || !dentista.ativo) {
-      throw new ConflictError("Dentista desativado não pode receber consultas.");
+      throw new ConflictError(MENSAGEM_DENTISTA_DESATIVADO);
     }
 
     const conflitos = await repository.findConflitos(
@@ -605,7 +641,8 @@ export async function mudarStatus(
       reabertura,
       (Object.keys(TRANSICOES) as StatusConsulta[]).filter((origem) =>
         TRANSICOES[origem].includes(novo)
-      )
+      ),
+      reabertura
     );
 
     switch (resultado.situacao) {
@@ -615,6 +652,8 @@ export async function mudarStatus(
         throw new NotFoundError("Consulta não encontrada.");
       case "paciente_inativo":
         throw new ConflictError(MENSAGEM_PACIENTE_DESATIVADO);
+      case "dentista_inativo":
+        throw new ConflictError(MENSAGEM_DENTISTA_DESATIVADO);
       case "sem_mudanca":
         throw new ConflictError("A consulta já está com este status.");
       case "alterada_por_outra_operacao":
@@ -704,6 +743,8 @@ export async function reagendar(
         throw new NotFoundError("Consulta não encontrada.");
       case "paciente_inativo":
         throw new ConflictError(MENSAGEM_PACIENTE_DESATIVADO);
+      case "dentista_inativo":
+        throw new ConflictError(MENSAGEM_DENTISTA_DESATIVADO);
       case "sem_mudanca":
         throw new ConflictError("O novo horário é igual ao atual.");
       case "alterada_por_outra_operacao":

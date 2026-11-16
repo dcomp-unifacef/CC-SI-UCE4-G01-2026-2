@@ -1,6 +1,8 @@
 import * as repository from "../repositories/dentistaRepository.ts";
 import * as orcamentoRepository from "../repositories/orcamentoRepository.ts";
 
+import { StatusConsulta } from "../../generated/prisma/client.ts";
+
 import type { Dentista } from "../../generated/prisma/client.ts";
 import type { CreateDentistaDto } from "../dto/dentista/createDentistaDto.ts";
 import type { UpdateDentistaDto } from "../dto/dentista/updateDentistaDto.ts";
@@ -23,6 +25,10 @@ const MENSAGEM_COM_VISITAS =
 
 const MENSAGEM_COM_CONSULTAS =
   "Dentista possui consultas na agenda e não pode ser excluído. Desative o cadastro.";
+
+
+const MENSAGEM_COM_CONSULTA_ABERTA =
+  "Dentista possui consulta agendada ou confirmada e não pode ser desativado. Remarque ou cancele as consultas antes.";
 
 
 const MENSAGEM_COM_ORCAMENTOS =
@@ -64,13 +70,26 @@ export async function update(
   id: number,
   data: UpdateDentistaDto
 ): Promise<Dentista> {
-  await findById(id);
+  const atual = await findById(id);
 
   const corpo = exigirCorpo(data);
   const alteracoes: UpdateDentistaDto = {};
 
   if (corpo.nome !== undefined) alteracoes.nome = textoObrigatorio(corpo, "nome");
   alteracoes.ativo = booleanoOpcional(corpo, "ativo");
+
+  if (alteracoes.ativo === false && atual.ativo) {
+    const resultado = await repository.desativarSeSemConsultaAberta(
+      id,
+      [StatusConsulta.AGENDADA, StatusConsulta.CONFIRMADA]
+    );
+
+    if (resultado.situacao === "com_consulta_aberta") {
+      throw new ConflictError(MENSAGEM_COM_CONSULTA_ABERTA);
+    }
+
+    alteracoes.ativo = undefined;
+  }
 
   return repository.update(id, alteracoes);
 }

@@ -88,6 +88,19 @@ export const ROTULO_PROCEDIMENTO_NAO_CLASSIFICADO =
   "Procedimento não classificado";
 
 
+const MENSAGEM_ITEM_INATIVO =
+  "Não é possível vincular a visita a um item desativado do catálogo.";
+
+
+function erroDoVinculo(
+  situacao: "procedimento_inativo" | "procedimento_inexistente"
+): Error {
+  return situacao === "procedimento_inativo"
+    ? new BadRequestError(MENSAGEM_ITEM_INATIVO)
+    : new NotFoundError("Procedimento não encontrado.");
+}
+
+
 async function validarProcedimentoNovoVinculo(
   procedimentoId: number
 ): Promise<void> {
@@ -96,9 +109,7 @@ async function validarProcedimentoNovoVinculo(
   const item = await procedimentoService.findById(procedimentoId);
 
   if (!item.ativo) {
-    throw new BadRequestError(
-      "Não é possível vincular a visita a um item desativado do catálogo."
-    );
+    throw new BadRequestError(MENSAGEM_ITEM_INATIVO);
   }
 }
 
@@ -240,7 +251,15 @@ async function criar(
     paciente_id,
   };
 
-  return repository.create(antigo ? { ...nova, registro_antigo: true } : nova);
+  const resultado = await repository.create(
+    antigo ? { ...nova, registro_antigo: true } : nova
+  );
+
+  if (resultado.situacao !== "criada") {
+    throw erroDoVinculo(resultado.situacao);
+  }
+
+  return resultado.visita;
 }
 
 
@@ -310,6 +329,9 @@ export async function update(
     switch (resultado.situacao) {
       case "alterada":
         return resultado.visita;
+      case "procedimento_inativo":
+      case "procedimento_inexistente":
+        throw erroDoVinculo(resultado.situacao);
       case "nao_encontrada":
         throw new NotFoundError("Visita não encontrada.");
       case "com_retorno":
@@ -321,7 +343,13 @@ export async function update(
     }
   }
 
-  return repository.update(id, alteracoes);
+  const atualizacao = await repository.update(id, alteracoes);
+
+  if (atualizacao.situacao !== "alterada") {
+    throw erroDoVinculo(atualizacao.situacao);
+  }
+
+  return atualizacao.visita;
 }
 
 
