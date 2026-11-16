@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch ./src/bin/server",
-    "start": "node ./dist/bin/server.js",
+    "start": "node ./dist/src/bin/server.js",
     "build": "rimraf dist && npx tsc",
     "postbuild": "copyfiles -u 1 src/views/*.null dist",
     "prestart": "npm run build",

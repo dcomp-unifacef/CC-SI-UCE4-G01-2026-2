@@ -19,6 +19,11 @@ export function errorHandler(
     return
   }
 
+  if ((error as { type?: string }).type === 'entity.too.large') {
+    res.status(413).json({ message: 'Corpo da requisição excede o limite permitido.' })
+    return
+  }
+
   if (error instanceof SyntaxError && (error as { status?: number }).status === 400) {
     res.status(400).json({ message: 'JSON inválido.' })
     return

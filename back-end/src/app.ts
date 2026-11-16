@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser'
 import logger from 'morgan'
 import cors from 'cors'
 
-import indexRouter from './routes/index'
+import indexRouter from './routes/index.ts'
 import pacientesRouter from './routes/pacientes.ts'
 import dentistasRouter from './routes/dentistas.ts'
 import historicoVisitasRouter from './routes/historicoVisitas.ts'
