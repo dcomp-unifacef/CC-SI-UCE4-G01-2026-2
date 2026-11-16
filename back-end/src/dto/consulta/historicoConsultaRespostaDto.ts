@@ -1,4 +1,5 @@
 import type {
+  MotivoConsulta,
   StatusConsulta,
   TipoHistoricoConsulta,
 } from "../../../generated/prisma/client.ts";
@@ -13,7 +14,9 @@ export interface HistoricoConsultaRespostaDto {
   inicio_novo: Date | null;
   duracao_anterior_min: number | null;
   duracao_nova_min: number | null;
-  motivo: string | null;
+  motivo?: string | null;
+  motivo_codigo: MotivoConsulta | null;
+  motivo_exibicao?: string | null;
   registrado_em: Date;
   usuario: { id: number; nome: string };
 }

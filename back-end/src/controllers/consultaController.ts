@@ -76,7 +76,10 @@ export async function historico(
   next: NextFunction
 ): Promise<void> {
   try {
-    const registros = await service.historico(Number(req.params.id));
+    const registros = await service.historico(
+      Number(req.params.id),
+      res.locals.usuario
+    );
 
 
     res.json(registros);

@@ -5,7 +5,12 @@ import * as pacienteRepository from "../repositories/pacienteRepository.ts";
 import * as dentistaRepository from "../repositories/dentistaRepository.ts";
 import * as procedimentoService from "./procedimentoService.ts";
 
-import { Perfil, StatusConsulta } from "../../generated/prisma/client.ts";
+import {
+  MotivoConsulta,
+  Perfil,
+  StatusConsulta,
+  TipoHistoricoConsulta,
+} from "../../generated/prisma/client.ts";
 
 import type { ConsultaCompleta } from "../repositories/consultaRepository.ts";
 import type { CadastroConsultaDto } from "../dto/consulta/cadastroConsultaDto.ts";
@@ -346,29 +351,100 @@ export async function findById(id: number): Promise<ConsultaRespostaDto> {
 }
 
 
+const CODIGOS_DE_MOTIVO: string[] = Object.values(MotivoConsulta);
+
+const MENSAGEM_TEXTO_LIVRE_NEGADO =
+  "A secretária informa apenas o código do motivo; o texto livre do motivo não é permitido para este perfil.";
+const ROTULO_MOTIVO_NAO_CLASSIFICADO = "Motivo não classificado";
+
+const ROTULOS_DE_MOTIVO: Record<MotivoConsulta, string> = {
+  [MotivoConsulta.SOLICITACAO_DO_PACIENTE]: "Solicitação do paciente",
+  [MotivoConsulta.IMPOSSIBILIDADE_DO_CONSULTORIO]: "Impossibilidade do consultório",
+  [MotivoConsulta.IMPOSSIBILIDADE_DO_DENTISTA]: "Impossibilidade do dentista",
+  [MotivoConsulta.OUTRO]: "Outro",
+};
+
+
+function podeVerTextoDoMotivo(usuario: UsuarioAutenticado): boolean {
+  return usuario.perfil === Perfil.DONO || usuario.perfil === Perfil.DENTISTA;
+}
+
+
+function lerMotivo(
+  corpo: Record<string, unknown>,
+  usuario: UsuarioAutenticado,
+  codigoObrigatorio: boolean
+): { motivo: string | null; motivo_codigo: MotivoConsulta | null } {
+  const texto = textoOpcional(corpo, "motivo") ?? null;
+
+  if (texto !== null && !podeVerTextoDoMotivo(usuario)) {
+    throw new ForbiddenError(MENSAGEM_TEXTO_LIVRE_NEGADO);
+  }
+
+  const codigo = corpo.motivo_codigo;
+
+  if (codigo === undefined || codigo === null) {
+    if (codigoObrigatorio) {
+      throw new BadRequestError(
+        `O campo "motivo_codigo" é obrigatório. Use ${CODIGOS_DE_MOTIVO.join(", ")}.`
+      );
+    }
+
+    return { motivo: texto, motivo_codigo: null };
+  }
+
+  if (typeof codigo !== "string" || !CODIGOS_DE_MOTIVO.includes(codigo)) {
+    throw new BadRequestError(
+      `O campo "motivo_codigo" é inválido. Use ${CODIGOS_DE_MOTIVO.join(", ")}.`
+    );
+  }
+
+  return { motivo: texto, motivo_codigo: codigo as MotivoConsulta };
+}
+
+
 export async function historico(
-  id: number
+  id: number,
+  usuario: UsuarioAutenticado
 ): Promise<HistoricoConsultaRespostaDto[]> {
   await buscarOuFalhar(id);
 
   const registros = await historicoRepository.findByConsulta(id);
+  const incluirTexto = podeVerTextoDoMotivo(usuario);
 
-  return registros.map((registro) => ({
-    id: registro.id,
-    tipo: registro.tipo,
-    status_anterior: registro.status_anterior,
-    status_novo: registro.status_novo,
-    inicio_anterior: registro.inicio_anterior,
-    inicio_novo: registro.inicio_novo,
-    duracao_anterior_min: registro.duracao_anterior_min,
-    duracao_nova_min: registro.duracao_nova_min,
-    motivo: registro.motivo,
-    registrado_em: registro.registrado_em,
-    usuario: {
-      id: registro.usuario.id,
-      nome: registro.usuario.nome,
-    },
-  }));
+  return registros.map((registro) => {
+    const teveMotivo =
+      registro.motivo !== null ||
+      registro.tipo === TipoHistoricoConsulta.REAGENDAMENTO ||
+      registro.status_novo === StatusConsulta.CANCELADA;
+
+    const motivo_exibicao =
+      registro.motivo_codigo !== null
+        ? ROTULOS_DE_MOTIVO[registro.motivo_codigo]
+        : teveMotivo
+          ? ROTULO_MOTIVO_NAO_CLASSIFICADO
+          : null;
+
+    return {
+      id: registro.id,
+      tipo: registro.tipo,
+      status_anterior: registro.status_anterior,
+      status_novo: registro.status_novo,
+      inicio_anterior: registro.inicio_anterior,
+      inicio_novo: registro.inicio_novo,
+      duracao_anterior_min: registro.duracao_anterior_min,
+      duracao_nova_min: registro.duracao_nova_min,
+      motivo_codigo: registro.motivo_codigo,
+      ...(incluirTexto
+        ? { motivo: registro.motivo }
+        : { motivo_exibicao }),
+      registrado_em: registro.registrado_em,
+      usuario: {
+        id: registro.usuario.id,
+        nome: registro.usuario.nome,
+      },
+    };
+  });
 }
 
 
@@ -521,10 +597,11 @@ export async function mudarStatus(
     );
   }
 
-  const motivo =
+  const { motivo, motivo_codigo } = lerMotivo(
+    corpo,
+    usuario,
     novo === StatusConsulta.CANCELADA
-      ? textoObrigatorio(corpo, "motivo")
-      : textoOpcional(corpo, "motivo");
+  );
 
   const agora = Date.now();
 
@@ -564,7 +641,8 @@ export async function mudarStatus(
         procedimento_id: atendimento.procedimento_id,
         observacoes: atendimento.observacoes,
         data_prevista_retorno,
-        motivo: motivo ?? null,
+        motivo,
+        motivo_codigo,
       },
       usuario.id,
       [StatusConsulta.AGENDADA, StatusConsulta.CONFIRMADA]
@@ -642,7 +720,8 @@ export async function mudarStatus(
       (Object.keys(TRANSICOES) as StatusConsulta[]).filter((origem) =>
         TRANSICOES[origem].includes(novo)
       ),
-      reabertura
+      reabertura,
+      motivo_codigo
     );
 
     switch (resultado.situacao) {
@@ -686,7 +765,7 @@ export async function reagendar(
 
   const corpo = exigirCorpo(data);
 
-  const motivo = textoObrigatorio(corpo, "motivo");
+  const { motivo, motivo_codigo } = lerMotivo(corpo, usuario, true);
   const inicio_em = lerDataHora(corpo, "inicio_em");
   const duracaoInformada = inteiroOpcional(corpo, "duracao_min");
 
@@ -733,7 +812,8 @@ export async function reagendar(
       id,
       { inicio_em, duracao_min },
       usuario.id,
-      motivo
+      motivo,
+      motivo_codigo
     );
 
     switch (resultado.situacao) {
