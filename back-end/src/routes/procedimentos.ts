@@ -10,10 +10,11 @@ import { exigirPerfil } from "../middlewares/exigirPerfil.ts";
 const router = Router();
 
 const clinicos = exigirPerfil(Perfil.DONO, Perfil.DENTISTA);
+const todos = exigirPerfil(Perfil.DONO, Perfil.DENTISTA, Perfil.SECRETARIA);
 
 
-router.get("/", clinicos, controller.index);
-router.get("/:id", clinicos, controller.retrieve);
+router.get("/", todos, controller.index);
+router.get("/:id", todos, controller.retrieve);
 router.post("/", clinicos, controller.create);
 router.patch("/:id", clinicos, controller.update);
 

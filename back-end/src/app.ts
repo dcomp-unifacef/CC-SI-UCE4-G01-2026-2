@@ -5,7 +5,6 @@ import logger from 'morgan'
 import cors from 'cors'
 
 import indexRouter from './routes/index'
-import usersRouter from './routes/users'
 import pacientesRouter from './routes/pacientes.ts'
 import dentistasRouter from './routes/dentistas.ts'
 import historicoVisitasRouter from './routes/historicoVisitas.ts'
@@ -52,7 +51,6 @@ app.use(cookieParser())
 /***************** ROTAS *************************/
 
 app.use('/', indexRouter)
-app.use('/users', usersRouter)
 
 app.use('/sessoes', verificarOrigem(allowedOrigins), sessoesRouter)
 app.use('/usuarios', verificarOrigem(allowedOrigins), usuariosRouter)
@@ -89,7 +87,12 @@ app.use('/procedimentos', autenticado, procedimentosRouter)
 app.use('/orcamentos', autenticado, orcamentosRouter)
 app.use('/consentimentos', autenticado, consentimentosRouter)
 app.use('/logs-acesso', protegidoSomenteDono, logsAcessoRouter)
-app.use('/historico-visitas', protegidoSomenteDono, historicoVisitasRouter)
+app.use('/historico-visitas', autenticado, exigirPerfilPorMetodo({
+  GET: [Perfil.DONO, Perfil.DENTISTA, Perfil.SECRETARIA],
+  POST: [Perfil.DONO, Perfil.DENTISTA],
+  PATCH: [Perfil.DONO, Perfil.DENTISTA],
+  DELETE: [Perfil.DONO],
+}), historicoVisitasRouter)
 app.use('/configuracoes', protegidoSomenteDono, configuracoesRouter)
 app.use('/backups', protegidoSomenteDono, backupsRouter)
 

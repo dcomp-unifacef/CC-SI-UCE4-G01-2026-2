@@ -2,8 +2,9 @@ import * as repository from "../repositories/historicoVisitaRepository.ts";
 import * as pacienteService from "./pacienteService.ts";
 import * as dentistaService from "./dentistaService.ts";
 import * as acessoService from "./acessoService.ts";
+import * as procedimentoService from "./procedimentoService.ts";
 
-import { TipoAcessoPaciente } from "../../generated/prisma/client.ts";
+import { Perfil, TipoAcessoPaciente } from "../../generated/prisma/client.ts";
 
 import type { UsuarioAutenticado } from "./consultaService.ts";
 
@@ -83,6 +84,52 @@ function validarDataVisita(valor: unknown): Date {
 }
 
 
+export const ROTULO_PROCEDIMENTO_NAO_CLASSIFICADO =
+  "Procedimento não classificado";
+
+
+async function validarProcedimentoNovoVinculo(
+  procedimentoId: number
+): Promise<void> {
+  validarId(procedimentoId);
+
+  const item = await procedimentoService.findById(procedimentoId);
+
+  if (!item.ativo) {
+    throw new BadRequestError(
+      "Não é possível vincular a visita a um item desativado do catálogo."
+    );
+  }
+}
+
+
+function lerProcedimentoId(
+  corpo: Record<string, unknown>
+): number | null | undefined {
+  if (corpo.procedimento_id === null) {
+    return null;
+  }
+
+  return inteiroOpcional(corpo, "procedimento_id");
+}
+
+
+function comRotulo<
+  T extends { procedimentoCatalogo: { id: number; nome: string } | null }
+>(visita: T) {
+  return {
+    ...visita,
+    procedimento_exibicao:
+      visita.procedimentoCatalogo?.nome ?? ROTULO_PROCEDIMENTO_NAO_CLASSIFICADO,
+  };
+}
+
+
+function restrito(usuario: UsuarioAutenticado): boolean {
+  return usuario.perfil === Perfil.SECRETARIA;
+}
+
+
 export async function findAll() {
   return repository.findAll();
 }
@@ -102,6 +149,20 @@ export async function findById(id: number) {
 
 
 export async function listar(usuario: UsuarioAutenticado) {
+  if (restrito(usuario)) {
+    const visitas = await repository.findAllRestrito();
+
+    if (visitas.length > 0) {
+      await acessoService.registrarLista(
+        usuario,
+        TipoAcessoPaciente.LISTA_VISITAS,
+        visitas.map((visita) => visita.paciente_id)
+      );
+    }
+
+    return visitas.map(comRotulo);
+  }
+
   const visitas = await findAll();
 
   if (visitas.length === 0) {
@@ -119,6 +180,24 @@ export async function listar(usuario: UsuarioAutenticado) {
 
 
 export async function consultar(id: number, usuario: UsuarioAutenticado) {
+  if (restrito(usuario)) {
+    validarId(id);
+
+    const visita = await repository.findByIdRestrito(id);
+
+    if (!visita) {
+      throw new NotFoundError("Visita não encontrada.");
+    }
+
+    await acessoService.registrar(
+      usuario,
+      TipoAcessoPaciente.VISITA,
+      visita.paciente_id
+    );
+
+    return comRotulo(visita);
+  }
+
   const visita = await findById(id);
 
   await acessoService.registrar(
@@ -143,12 +222,19 @@ async function criar(
   const paciente_id = inteiroObrigatorio(corpo, "paciente_id");
   const dentista_id = inteiroObrigatorio(corpo, "dentista_id");
 
+  const procedimento_id = lerProcedimentoId(corpo);
+
   await validarPaciente(paciente_id, antigo);
   await validarDentista(dentista_id, antigo);
+
+  if (procedimento_id !== undefined && procedimento_id !== null) {
+    await validarProcedimentoNovoVinculo(procedimento_id);
+  }
 
   const nova: CreateHistoricoVisitaDto = {
     data_visita,
     procedimento,
+    procedimento_id,
     dentista_id,
     observacoes,
     paciente_id,
@@ -190,6 +276,16 @@ export async function update(
   }
 
   alteracoes.observacoes = textoOpcional(corpo, "observacoes");
+
+  const procedimento_id = lerProcedimentoId(corpo);
+
+  if (procedimento_id !== undefined) {
+    if (procedimento_id !== null && procedimento_id !== atual.procedimento_id) {
+      await validarProcedimentoNovoVinculo(procedimento_id);
+    }
+
+    alteracoes.procedimento_id = procedimento_id;
+  }
 
   const paciente_id = inteiroOpcional(corpo, "paciente_id");
 
