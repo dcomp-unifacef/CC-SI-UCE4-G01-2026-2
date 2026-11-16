@@ -14,7 +14,7 @@ import {
   TipoHistoricoRetorno,
 } from "../../generated/prisma/client.ts";
 
-import type { Prisma } from "../../generated/prisma/client.ts";
+import type { MotivoConsulta, Prisma } from "../../generated/prisma/client.ts";
 
 import type { CreateConsultaDto }
   from "../dto/consulta/createConsultaDto.ts";
@@ -212,7 +212,8 @@ export function mudarStatus(
   motivo?: string | null,
   exigirPacienteAtivo = false,
   origensPermitidas?: StatusConsulta[],
-  exigirDentistaAtivo = false
+  exigirDentistaAtivo = false,
+  motivoCodigo: MotivoConsulta | null = null
 ) {
   return prisma.$transaction(async (tx): Promise<ResultadoDaAlteracao> => {
     const atual = await tx.consulta.findUnique({
@@ -265,6 +266,7 @@ export function mudarStatus(
         status_anterior: atual.status,
         status_novo: novoStatus,
         motivo: motivo ?? null,
+        motivo_codigo: motivoCodigo,
         usuario_id: usuarioId,
       },
     });
@@ -286,6 +288,7 @@ export interface DadosDaRealizacao {
   observacoes: string | null;
   data_prevista_retorno: Date;
   motivo: string | null;
+  motivo_codigo?: MotivoConsulta | null;
 }
 
 
@@ -386,6 +389,7 @@ export async function realizarComVisita(
             status_anterior: atual.status,
             status_novo: StatusConsulta.REALIZADA,
             motivo: dados.motivo,
+            motivo_codigo: dados.motivo_codigo ?? null,
             usuario_id: usuarioId,
           },
         });
@@ -458,7 +462,8 @@ export function reagendar(
   id: number,
   novo: ReagendarConsultaDto,
   usuarioId: number,
-  motivo?: string | null
+  motivo?: string | null,
+  motivoCodigo: MotivoConsulta | null = null
 ) {
   return prisma.$transaction(async (tx): Promise<ResultadoDaAlteracao> => {
     const atual = await tx.consulta.findUnique({
@@ -525,6 +530,7 @@ export function reagendar(
         duracao_anterior_min: atual.duracao_min,
         duracao_nova_min: novo.duracao_min,
         motivo: motivo ?? null,
+        motivo_codigo: motivoCodigo,
         usuario_id: usuarioId,
       },
     });

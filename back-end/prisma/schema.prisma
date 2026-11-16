@@ -158,6 +158,13 @@ enum TipoHistoricoConsulta {
   REAGENDAMENTO
 }
 
+enum MotivoConsulta {
+  SOLICITACAO_DO_PACIENTE
+  IMPOSSIBILIDADE_DO_CONSULTORIO
+  IMPOSSIBILIDADE_DO_DENTISTA
+  OUTRO
+}
+
 model HistoricoConsulta {
   id                   Int                   @id @default(autoincrement())
   consulta_id          Int
@@ -170,6 +177,7 @@ model HistoricoConsulta {
   duracao_anterior_min Int?
   duracao_nova_min     Int?
   motivo               String?
+  motivo_codigo        MotivoConsulta?
   usuario_id           Int
   usuario              Usuario               @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
   registrado_em        DateTime              @default(now()) @db.Timestamptz(3)
