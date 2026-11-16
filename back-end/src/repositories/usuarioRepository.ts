@@ -13,7 +13,7 @@ import type { LoginNormalizado } from "../utils/login.ts";
 
 import { Perfil } from "../../generated/prisma/client.ts";
 import type { Usuario } from "../../generated/prisma/client.ts";
-import { BLOQUEIO_DONOS } from "../database/bloqueios.ts";
+import { BLOQUEIO_CONFIGURACAO, BLOQUEIO_DONOS } from "../database/bloqueios.ts";
 
 
 const semSenha = { senha_hash: true } as const;
@@ -135,26 +135,50 @@ export function bloquearSeTentativasEsgotadas(
 }
 
 
+export type ResultadoDoLogin =
+  | { situacao: "concluido"; expira_em: Date; duracaoEmMs: number }
+  | { situacao: "recusado" }
+  | { situacao: "sem_configuracao" };
+
+
 export function concluirLogin(
   id: number,
   senhaHashConferido: string,
-  sessao: Omit<CreateSessaoDto, "usuario_id">
+  token_hash: string
 ) {
-  return prisma.$transaction(async (tx) => {
-    const { count } = await tx.usuario.updateMany({
-      where: { id, ativo: true, senha_hash: senhaHashConferido },
-      data: { tentativas_falhas: 0, bloqueado_ate: null },
-    });
+  return prisma.$transaction(
+    async (tx): Promise<ResultadoDoLogin> => {
+      await tx.$queryRaw`SELECT 1 AS bloqueado FROM (SELECT pg_advisory_xact_lock(${BLOQUEIO_CONFIGURACAO}::bigint)) AS trava`;
 
-    if (count !== 1) {
-      return null;
-    }
+      const configuracao = await tx.configuracao.findUnique({
+        where: { id: 1 },
+      });
 
-    return tx.sessao.create({
-      data: { ...sessao, usuario_id: id },
-      omit: { token_hash: true },
-    });
-  });
+      if (!configuracao) {
+        return { situacao: "sem_configuracao" };
+      }
+
+      const { count } = await tx.usuario.updateMany({
+        where: { id, ativo: true, senha_hash: senhaHashConferido },
+        data: { tentativas_falhas: 0, bloqueado_ate: null },
+      });
+
+      if (count !== 1) {
+        return { situacao: "recusado" };
+      }
+
+      const duracaoEmMs = configuracao.sessao_duracao_max_min * 60 * 1000;
+      const expira_em = new Date(Date.now() + duracaoEmMs);
+
+      await tx.sessao.create({
+        data: { token_hash, usuario_id: id, expira_em },
+        omit: { token_hash: true },
+      });
+
+      return { situacao: "concluido", expira_em, duracaoEmMs };
+    },
+    { maxWait: 10_000, timeout: 20_000 }
+  );
 }
 
 

@@ -45,6 +45,10 @@ const BLOQUEIO_EM_MS = MINUTO_EM_MS;
 
 const INTERVALO_DE_USO_EM_MS = MINUTO_EM_MS;
 
+const RETENCAO_DAS_SESSOES_EM_MS = 30 * 24 * 60 * MINUTO_EM_MS;
+
+const LOTE_DA_LIMPEZA = 500;
+
 
 const hashFalso = gerarHashSenha("senha-ficticia-para-login-inexistente");
 
@@ -126,38 +130,51 @@ export async function login(data: LoginDto): Promise<SessaoIniciada> {
     throw new UnauthorizedError(MENSAGEM_LOGIN);
   }
 
-  const configuracao = await configuracaoRepository.find();
-
-  if (!configuracao) {
-    throw new AppError(MENSAGEM_INTERNA, 500);
-  }
-
   const usuario = await usuarioRepository.findById(credenciais.id);
 
   if (!usuario) {
     throw new UnauthorizedError(MENSAGEM_LOGIN);
   }
 
-  const duracaoEmMs = configuracao.sessao_duracao_max_min * MINUTO_EM_MS;
-  const expira_em = new Date(Date.now() + duracaoEmMs);
   const { token, hash } = gerarToken();
 
-  const sessaoCriada = await usuarioRepository.concluirLogin(
+  const resultado = await usuarioRepository.concluirLogin(
     usuario.id,
     credenciais.senha_hash,
-    { token_hash: hash, expira_em }
+    hash
   );
 
-  if (sessaoCriada === null) {
+  if (resultado.situacao === "sem_configuracao") {
+    throw new AppError(MENSAGEM_INTERNA, 500);
+  }
+
+  if (resultado.situacao === "recusado") {
     throw new UnauthorizedError(MENSAGEM_LOGIN);
   }
 
+  await limparSessoesAntigas();
+
   return {
     token,
-    duracaoEmMs,
-    expira_em,
+    duracaoEmMs: resultado.duracaoEmMs,
+    expira_em: resultado.expira_em,
     usuario: paraUsuarioAutenticado(usuario),
   };
+}
+
+
+async function limparSessoesAntigas(): Promise<void> {
+  try {
+    await sessaoRepository.removerExpiradasEmLote(
+      new Date(Date.now() - RETENCAO_DAS_SESSOES_EM_MS),
+      LOTE_DA_LIMPEZA
+    );
+  }
+  catch (erro) {
+    const e = erro as { name?: string; code?: string };
+
+    console.error("Limpeza de sessões não concluída:", e?.name ?? "Error", e?.code ?? "");
+  }
 }
 
 
@@ -201,16 +218,16 @@ export async function validar(token: unknown): Promise<SessaoValida> {
     throw new UnauthorizedError(MENSAGEM_SESSAO);
   }
 
-  const sessao = await sessaoRepository.findByTokenHash(hashDoToken(token));
-
-  if (!sessao || sessao.revogada_em !== null || !sessao.usuario.ativo) {
-    throw new UnauthorizedError(MENSAGEM_SESSAO);
-  }
-
   const configuracao = await configuracaoRepository.find();
 
   if (!configuracao) {
     throw new AppError(MENSAGEM_INTERNA, 500);
+  }
+
+  const sessao = await sessaoRepository.findByTokenHash(hashDoToken(token));
+
+  if (!sessao || sessao.revogada_em !== null || !sessao.usuario.ativo) {
+    throw new UnauthorizedError(MENSAGEM_SESSAO);
   }
 
   const agora = new Date();

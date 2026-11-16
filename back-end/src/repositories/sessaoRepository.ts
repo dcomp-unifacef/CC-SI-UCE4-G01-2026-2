@@ -62,6 +62,29 @@ export function countExpiradas(antes: Date, usuarioId?: number) {
 }
 
 
+export async function removerExpiradasEmLote(antes: Date, tamanho: number) {
+  const lote = await prisma.sessao.findMany({
+    where: { expira_em: { lt: antes } },
+    select: { id: true },
+    orderBy: [{ expira_em: "asc" }, { id: "asc" }],
+    take: tamanho,
+  });
+
+  if (lote.length === 0) {
+    return 0;
+  }
+
+  const { count } = await prisma.sessao.deleteMany({
+    where: {
+      id: { in: lote.map((sessao) => sessao.id) },
+      expira_em: { lt: antes },
+    },
+  });
+
+  return count;
+}
+
+
 export function deleteExpiradas(antes: Date, usuarioId?: number) {
   return prisma.sessao.deleteMany({
     where: {
