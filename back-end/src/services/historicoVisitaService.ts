@@ -223,7 +223,8 @@ export async function consultar(id: number, usuario: UsuarioAutenticado) {
 
 async function criar(
   data: unknown,
-  antigo: boolean
+  antigo: boolean,
+  usuario: UsuarioAutenticado
 ): Promise<HistoricoVisita> {
   const corpo = exigirCorpo(data);
 
@@ -252,7 +253,8 @@ async function criar(
   };
 
   const resultado = await repository.create(
-    antigo ? { ...nova, registro_antigo: true } : nova
+    antigo ? { ...nova, registro_antigo: true } : nova,
+    usuario.id
   );
 
   if (resultado.situacao !== "criada") {
@@ -264,16 +266,18 @@ async function criar(
 
 
 export async function create(
-  data: CreateHistoricoVisitaDto
+  data: CreateHistoricoVisitaDto,
+  usuario: UsuarioAutenticado
 ): Promise<HistoricoVisita> {
-  return criar(data, false);
+  return criar(data, false, usuario);
 }
 
 
 export async function createAntigo(
-  data: CreateHistoricoVisitaDto
+  data: CreateHistoricoVisitaDto,
+  usuario: UsuarioAutenticado
 ): Promise<HistoricoVisita> {
-  return criar(data, true);
+  return criar(data, true, usuario);
 }
 
 

@@ -1,6 +1,11 @@
 import { prisma } from "../database/client.ts";
 
 import { travarItemParaVinculo } from "./procedimentoRepository.ts";
+import {
+  encerrarRetornoDaVisitaAnterior,
+  travarVisitasDoPaciente,
+  visitaMaisRecenteDoPaciente,
+} from "./retornoRepository.ts";
 
 import {
   SituacaoRetorno,
@@ -339,6 +344,8 @@ export async function realizarComVisita(
           return { situacao: "alterada_por_outra_operacao" };
         }
 
+        await travarVisitasDoPaciente(tx, atual.paciente_id);
+
         const trava = await tx.paciente.updateMany({
           where: { id: atual.paciente_id, ativo: true },
           data: { ativo: true },
@@ -383,6 +390,8 @@ export async function realizarComVisita(
           },
         });
 
+        const anterior = await visitaMaisRecenteDoPaciente(tx, atual.paciente_id);
+
         const visita = await tx.historicoVisita.create({
           data: {
             data_visita: dados.data_visita,
@@ -394,6 +403,13 @@ export async function realizarComVisita(
             consulta_id: id,
           },
         });
+
+        await encerrarRetornoDaVisitaAnterior(
+          tx,
+          anterior,
+          visita.data_visita,
+          usuarioId
+        );
 
         const retorno = await tx.retorno.create({
           data: {

@@ -1,6 +1,11 @@
 import { prisma } from "../database/client.ts";
 
 import { travarItemParaVinculo } from "./procedimentoRepository.ts";
+import {
+  encerrarRetornoDaVisitaAnterior,
+  travarVisitasDoPaciente,
+  visitaMaisRecenteDoPaciente,
+} from "./retornoRepository.ts";
 
 import type { HistoricoVisita } from "../../generated/prisma/client.ts";
 
@@ -173,10 +178,13 @@ export function create(
   data: CreateHistoricoVisitaDto & {
     registro_antigo?: boolean;
     consulta_id?: number | null;
-  }
+  },
+  usuarioId: number
 ) {
   return prisma.$transaction(
     async (tx): Promise<ResultadoDaCriacaoDaVisita> => {
+      await travarVisitasDoPaciente(tx, data.paciente_id);
+
       if (data.procedimento_id !== undefined && data.procedimento_id !== null) {
         const item = await travarItemParaVinculo(tx, data.procedimento_id);
 
@@ -185,7 +193,16 @@ export function create(
         }
       }
 
+      const anterior = await visitaMaisRecenteDoPaciente(tx, data.paciente_id);
+
       const visita = await tx.historicoVisita.create({ data });
+
+      await encerrarRetornoDaVisitaAnterior(
+        tx,
+        anterior,
+        visita.data_visita,
+        usuarioId
+      );
 
       return { situacao: "criada", visita };
     },

@@ -1,9 +1,12 @@
 import { prisma } from "../database/client.ts";
+import { BLOQUEIO_VISITA_PACIENTE } from "../database/bloqueios.ts";
 
 import {
   SituacaoRetorno,
   TipoHistoricoRetorno,
 } from "../../generated/prisma/client.ts";
+
+import type { Prisma } from "../../generated/prisma/client.ts";
 
 import type { CreateRetornoDto }
   from "../dto/retorno/createRetornoDto.ts";
@@ -69,6 +72,82 @@ function violouUnicidade(erro: unknown): boolean {
 }
 
 
+export async function travarVisitasDoPaciente(
+  tx: Prisma.TransactionClient,
+  paciente_id: number
+): Promise<void> {
+  await tx.$queryRaw`SELECT 1 AS bloqueado FROM (SELECT pg_advisory_xact_lock(${BLOQUEIO_VISITA_PACIENTE}::int, ${paciente_id}::int)) AS trava`;
+}
+
+
+export function visitaMaisRecenteDoPaciente(
+  tx: Prisma.TransactionClient,
+  paciente_id: number
+) {
+  return tx.historicoVisita.findFirst({
+    where: { paciente_id },
+    orderBy: [
+      { data_visita: "desc" },
+      { id: "desc" },
+    ],
+    select: { id: true, data_visita: true },
+  });
+}
+
+
+export async function encerrarRetornoDaVisitaAnterior(
+  tx: Prisma.TransactionClient,
+  anterior: { id: number; data_visita: Date } | null,
+  data_visita_nova: Date,
+  usuarioId: number
+): Promise<number | null> {
+  if (anterior === null) {
+    return null;
+  }
+
+  if (data_visita_nova.getTime() < anterior.data_visita.getTime()) {
+    return null;
+  }
+
+  const aberto = await tx.retorno.findFirst({
+    where: {
+      visita_origem_id: anterior.id,
+      situacao: SituacaoRetorno.ABERTO,
+    },
+    select: { id: true },
+  });
+
+  if (!aberto) {
+    return null;
+  }
+
+  const { count } = await tx.retorno.updateMany({
+    where: { id: aberto.id, situacao: SituacaoRetorno.ABERTO },
+    data: {
+      situacao: SituacaoRetorno.ATENDIDO,
+      encerrado_em: new Date(),
+      encerrado_por_id: usuarioId,
+    },
+  });
+
+  if (count !== 1) {
+    return null;
+  }
+
+  await tx.historicoRetorno.create({
+    data: {
+      retorno_id: aberto.id,
+      tipo: TipoHistoricoRetorno.ATENDIMENTO,
+      situacao_anterior: SituacaoRetorno.ABERTO,
+      situacao_nova: SituacaoRetorno.ATENDIDO,
+      usuario_id: usuarioId,
+    },
+  });
+
+  return aberto.id;
+}
+
+
 export function findById(id: number) {
   return buscar(id);
 }
@@ -127,6 +206,8 @@ export async function criar(
       if (!visita) {
         return { situacao: "visita_nao_encontrada" };
       }
+
+      await travarVisitasDoPaciente(tx, visita.paciente_id);
 
       const pacienteAtivo = await tx.paciente.updateMany({
         where: { id: visita.paciente_id, ativo: true },

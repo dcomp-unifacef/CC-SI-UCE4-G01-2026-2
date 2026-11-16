@@ -74,7 +74,7 @@ export async function create(
   next: NextFunction
 ): Promise<void> {
   try {
-    const visita = await service.create(req.body);
+    const visita = await service.create(req.body, res.locals.usuario);
 
 
     res.status(201).json(visita);
@@ -91,7 +91,7 @@ export async function createAntigo(
   next: NextFunction
 ): Promise<void> {
   try {
-    const visita = await service.createAntigo(req.body);
+    const visita = await service.createAntigo(req.body, res.locals.usuario);
 
 
     res.status(201).json(visita);
