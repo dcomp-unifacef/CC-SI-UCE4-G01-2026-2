@@ -16,7 +16,48 @@ const include = {
   dentista: {
     select: { id: true, nome: true },
   },
+  procedimentoCatalogo: {
+    select: { id: true, nome: true },
+  },
 };
+
+
+const selectRestrito = {
+  id: true,
+  data_visita: true,
+  registro_antigo: true,
+  paciente_id: true,
+  dentista_id: true,
+  consulta_id: true,
+  procedimento_id: true,
+  paciente: {
+    select: { id: true, nome: true, telefone: true },
+  },
+  dentista: {
+    select: { id: true, nome: true },
+  },
+  procedimentoCatalogo: {
+    select: { id: true, nome: true },
+  },
+};
+
+
+export function findAllRestrito() {
+  return prisma.historicoVisita.findMany({
+    select: selectRestrito,
+    orderBy: {
+      data_visita: "desc",
+    },
+  });
+}
+
+
+export function findByIdRestrito(id: number) {
+  return prisma.historicoVisita.findUnique({
+    where: { id },
+    select: selectRestrito,
+  });
+}
 
 
 export function findAll() {

@@ -61,7 +61,11 @@ model HistoricoVisita {
   dentista        Dentista  @relation(fields: [dentista_id], references: [id], onDelete: Restrict)
   consulta_id     Int?      @unique
   consulta        Consulta? @relation(fields: [consulta_id], references: [id], onDelete: Restrict)
+  procedimento_id Int?
+  procedimentoCatalogo Procedimento? @relation(fields: [procedimento_id], references: [id], onDelete: Restrict)
   retornos        Retorno[]
+
+  @@index([procedimento_id])
 }
 
 enum Perfil {
@@ -283,6 +287,7 @@ model Procedimento {
   criado_em      DateTime        @default(now()) @db.Timestamptz(3)
   atualizado_em  DateTime        @updatedAt @db.Timestamptz(3)
   itensOrcamento ItemOrcamento[]
+  visitas        HistoricoVisita[]
 
   @@index([ativo, nome])
 }
