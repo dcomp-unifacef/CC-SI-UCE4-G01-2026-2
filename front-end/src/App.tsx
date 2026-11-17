@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router'
 import { AgendaDia } from './components/AgendaDia'
+import { CancelarConsulta } from './components/CancelarConsulta'
+import { ConsultaCarregada } from './components/ConsultaCarregada'
 import { ConsultaForm } from './components/ConsultaForm'
+import { RealizarConsulta } from './components/RealizarConsulta'
+import { ReagendarConsulta } from './components/ReagendarConsulta'
 import { Login } from './components/Login'
 import { PacientesList } from './components/PacientesList'
 import { ErroApi, chamarApi } from './services/api'
@@ -138,6 +142,77 @@ function App() {
                 <Navigate to="/agenda" replace />
               ) : (
                 <ConsultaForm onSessaoExpirada={sessaoExpirada} />
+              )
+            }
+          />
+
+          <Route
+            path="/agenda/:id/cancelar"
+            element={
+              !usuario ? (
+                <Navigate to="/login" replace />
+              ) : usuario.perfil === 'DENTISTA' ? (
+                <Navigate to="/agenda" replace />
+              ) : (
+                <ConsultaCarregada
+                  titulo="Cancelar consulta"
+                  onSessaoExpirada={sessaoExpirada}
+                >
+                  {(consulta) => (
+                    <CancelarConsulta
+                      usuario={usuario}
+                      consulta={consulta}
+                      onSessaoExpirada={sessaoExpirada}
+                    />
+                  )}
+                </ConsultaCarregada>
+              )
+            }
+          />
+
+          <Route
+            path="/agenda/:id/reagendar"
+            element={
+              !usuario ? (
+                <Navigate to="/login" replace />
+              ) : usuario.perfil === 'DENTISTA' ? (
+                <Navigate to="/agenda" replace />
+              ) : (
+                <ConsultaCarregada
+                  titulo="Reagendar consulta"
+                  onSessaoExpirada={sessaoExpirada}
+                >
+                  {(consulta) => (
+                    <ReagendarConsulta
+                      usuario={usuario}
+                      consulta={consulta}
+                      onSessaoExpirada={sessaoExpirada}
+                    />
+                  )}
+                </ConsultaCarregada>
+              )
+            }
+          />
+
+          <Route
+            path="/agenda/:id/realizar"
+            element={
+              !usuario ? (
+                <Navigate to="/login" replace />
+              ) : usuario.perfil === 'SECRETARIA' ? (
+                <Navigate to="/agenda" replace />
+              ) : (
+                <ConsultaCarregada
+                  titulo="Realizar atendimento"
+                  onSessaoExpirada={sessaoExpirada}
+                >
+                  {(consulta) => (
+                    <RealizarConsulta
+                      consulta={consulta}
+                      onSessaoExpirada={sessaoExpirada}
+                    />
+                  )}
+                </ConsultaCarregada>
               )
             }
           />

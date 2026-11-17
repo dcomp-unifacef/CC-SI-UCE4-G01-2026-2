@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { ErroApi, chamarApi, mensagemDoErro } from '../services/api'
 import { formatarHora, hoje } from '../utils/datas'
+import { SITUACOES } from '../types/Consulta'
 import type { Consulta, StatusConsulta } from '../types/Consulta'
 import type { Dentista } from '../types/Dentista'
 import type { Usuario } from '../types/Usuario'
@@ -17,14 +18,6 @@ type Resposta = {
   erro: string
 }
 
-const SITUACOES: Record<StatusConsulta, { rotulo: string; classe: string }> = {
-  AGENDADA: { rotulo: 'Agendada', classe: 'text-bg-primary' },
-  CONFIRMADA: { rotulo: 'Confirmada', classe: 'text-bg-success' },
-  REALIZADA: { rotulo: 'Realizada', classe: 'text-bg-secondary' },
-  FALTOU: { rotulo: 'Faltou', classe: 'text-bg-warning' },
-  CANCELADA: { rotulo: 'Cancelada', classe: 'text-bg-danger' },
-}
-
 export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
   const [parametros] = useSearchParams()
   const [dia, setDia] = useState(parametros.get('dia') ?? hoje())
@@ -34,7 +27,11 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
   const [tentativa, setTentativa] = useState(0)
   const [resposta, setResposta] = useState<Resposta | null>(null)
   const [aviso, setAviso] = useState('')
-  const [confirmando, setConfirmando] = useState<number | null>(null)
+  const [acao, setAcao] = useState<number | null>(null)
+  const [faltaPendente, setFaltaPendente] = useState<number | null>(null)
+
+  const gestao = usuario.perfil !== 'DENTISTA'
+  const clinico = usuario.perfil !== 'SECRETARIA'
 
   const diaValido = /^\d{4}-\d{2}-\d{2}$/.test(dia) && dia >= '2000-01-01'
   const chave = `${dia}|${dentistaId}|${tentativa}`
@@ -100,14 +97,15 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
     }
   }, [chave, dia, diaValido, dentistaId, onSessaoExpirada])
 
-  async function confirmar(consulta: Consulta) {
-    setConfirmando(consulta.id)
+  async function mudarStatus(consulta: Consulta, status: StatusConsulta) {
+    setAcao(consulta.id)
     setAviso('')
+    setFaltaPendente(null)
 
     try {
       const atualizada = await chamarApi<Consulta>(
         `/consultas/${consulta.id}/status`,
-        { method: 'PATCH', body: JSON.stringify({ status: 'CONFIRMADA' }) },
+        { method: 'PATCH', body: JSON.stringify({ status }) },
       )
 
       setResposta((atual) =>
@@ -127,10 +125,10 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
         return
       }
 
-      setAviso(mensagemDoErro(e, 'Não foi possível confirmar a consulta.'))
+      setAviso(mensagemDoErro(e, 'Não foi possível alterar a consulta.'))
     }
     finally {
-      setConfirmando(null)
+      setAcao(null)
     }
   }
 
@@ -145,7 +143,7 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h2 className="h5 mb-0">Agenda do dia</h2>
 
-        {usuario.perfil !== 'DENTISTA' && (
+        {gestao && (
           <Link
             to={`/agenda/nova?dia=${diaValido ? dia : hoje()}`}
             className="btn btn-primary btn-sm"
@@ -233,42 +231,106 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
             </tr>
           </thead>
           <tbody>
-            {consultas.map((consulta) => (
-              <tr key={consulta.id}>
-                <td>
-                  {formatarHora(consulta.inicio_em)} –{' '}
-                  {formatarHora(consulta.fim_em)}
-                </td>
-                <td>{consulta.paciente.nome}</td>
-                <td>{consulta.dentista.nome}</td>
-                <td>
-                  <span
-                    className={`badge ${SITUACOES[consulta.status].classe}`}
-                  >
-                    {SITUACOES[consulta.status].rotulo}
-                  </span>
-                  {consulta.encaixe && (
-                    <span className="badge text-bg-light border ms-1">
-                      Encaixe
-                    </span>
-                  )}
-                </td>
-                <td className="text-end">
-                  {consulta.status === 'AGENDADA' && (
-                    <button
-                      type="button"
-                      className="btn btn-outline-success btn-sm"
-                      disabled={confirmando === consulta.id}
-                      onClick={() => confirmar(consulta)}
+            {consultas.map((consulta) => {
+              const ativa =
+                consulta.status === 'AGENDADA' ||
+                consulta.status === 'CONFIRMADA'
+
+              return (
+                <tr key={consulta.id}>
+                  <td>
+                    {formatarHora(consulta.inicio_em)} –{' '}
+                    {formatarHora(consulta.fim_em)}
+                  </td>
+                  <td>{consulta.paciente.nome}</td>
+                  <td>{consulta.dentista.nome}</td>
+                  <td>
+                    <span
+                      className={`badge ${SITUACOES[consulta.status].classe}`}
                     >
-                      {confirmando === consulta.id
-                        ? 'Confirmando...'
-                        : 'Confirmar'}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+                      {SITUACOES[consulta.status].rotulo}
+                    </span>
+                    {consulta.encaixe && (
+                      <span className="badge text-bg-light border ms-1">
+                        Encaixe
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    <div className="d-flex flex-wrap gap-1 justify-content-end">
+                      {consulta.status === 'AGENDADA' && (
+                        <button
+                          type="button"
+                          className="btn btn-outline-success btn-sm"
+                          disabled={acao !== null}
+                          onClick={() => mudarStatus(consulta, 'CONFIRMADA')}
+                        >
+                          {acao === consulta.id ? 'Aguarde...' : 'Confirmar'}
+                        </button>
+                      )}
+
+                      {ativa && clinico && (
+                        <Link
+                          to={`/agenda/${consulta.id}/realizar`}
+                          className="btn btn-outline-primary btn-sm"
+                        >
+                          Realizar
+                        </Link>
+                      )}
+
+                      {ativa && faltaPendente !== consulta.id && (
+                        <button
+                          type="button"
+                          className="btn btn-outline-warning btn-sm"
+                          disabled={acao !== null}
+                          onClick={() => setFaltaPendente(consulta.id)}
+                        >
+                          Faltou
+                        </button>
+                      )}
+
+                      {ativa && faltaPendente === consulta.id && (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn-warning btn-sm"
+                            disabled={acao !== null}
+                            onClick={() => mudarStatus(consulta, 'FALTOU')}
+                          >
+                            Confirmar falta
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-outline-secondary btn-sm"
+                            onClick={() => setFaltaPendente(null)}
+                          >
+                            Voltar
+                          </button>
+                        </>
+                      )}
+
+                      {ativa && gestao && (
+                        <Link
+                          to={`/agenda/${consulta.id}/reagendar`}
+                          className="btn btn-outline-secondary btn-sm"
+                        >
+                          Reagendar
+                        </Link>
+                      )}
+
+                      {ativa && gestao && (
+                        <Link
+                          to={`/agenda/${consulta.id}/cancelar`}
+                          className="btn btn-outline-danger btn-sm"
+                        >
+                          Cancelar
+                        </Link>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       )}

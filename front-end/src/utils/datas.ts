@@ -13,6 +13,15 @@ const formatoHora = new Intl.DateTimeFormat('pt-BR', {
   minute: '2-digit',
 })
 
+const formatoDataHora = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: FUSO,
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
 const formatoPartes = new Intl.DateTimeFormat('en-US', {
   timeZone: FUSO,
   hourCycle: 'h23',
@@ -30,6 +39,20 @@ export function hoje(): string {
 
 export function formatarHora(instante: string): string {
   return formatoHora.format(new Date(instante))
+}
+
+export function diaDoInstante(instante: string): string {
+  return formatoDia.format(new Date(instante))
+}
+
+export function formatarDataHora(instante: string): string {
+  return formatoDataHora.format(new Date(instante))
+}
+
+export function formatarDiaCivil(dia: string): string {
+  const [ano, mes, diaDoMes] = dia.slice(0, 10).split('-')
+
+  return `${diaDoMes}/${mes}/${ano}`
 }
 
 function deslocamentoEmMs(instante: number): number {
