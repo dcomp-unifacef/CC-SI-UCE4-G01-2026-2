@@ -12,6 +12,10 @@ export class ErroApi extends Error {
   }
 }
 
+export function mensagemDoErro(erro: unknown, padrao: string): string {
+  return erro instanceof ErroApi ? erro.message : padrao
+}
+
 function mensagemPadrao(status: number): string {
   if (status === 401) {
     return 'Sua sessão expirou. Entre novamente.'

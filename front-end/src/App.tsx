@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router'
+import { AgendaDia } from './components/AgendaDia'
+import { ConsultaForm } from './components/ConsultaForm'
 import { Login } from './components/Login'
 import { PacientesList } from './components/PacientesList'
 import { ErroApi, chamarApi } from './services/api'
@@ -80,6 +82,12 @@ function App() {
           <div className="container">
             <ul className="nav nav-pills">
               <li className="nav-item">
+                <NavLink to="/agenda" className="nav-link">
+                  Agenda
+                </NavLink>
+              </li>
+
+              <li className="nav-item">
                 <NavLink to="/pacientes" className="nav-link">
                   Pacientes
                 </NavLink>
@@ -97,15 +105,39 @@ function App() {
         )}
 
         <Routes>
-          <Route path="/" element={<Navigate to="/pacientes" replace />} />
+          <Route path="/" element={<Navigate to="/agenda" replace />} />
 
           <Route
             path="/login"
             element={
               usuario ? (
-                <Navigate to="/pacientes" replace />
+                <Navigate to="/agenda" replace />
               ) : (
                 <Login onEntrar={entrar} />
+              )
+            }
+          />
+
+          <Route
+            path="/agenda"
+            element={
+              usuario ? (
+                <AgendaDia usuario={usuario} onSessaoExpirada={sessaoExpirada} />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+
+          <Route
+            path="/agenda/nova"
+            element={
+              !usuario ? (
+                <Navigate to="/login" replace />
+              ) : usuario.perfil === 'DENTISTA' ? (
+                <Navigate to="/agenda" replace />
+              ) : (
+                <ConsultaForm onSessaoExpirada={sessaoExpirada} />
               )
             }
           />

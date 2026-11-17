@@ -1,0 +1,74 @@
+const FUSO = 'America/Sao_Paulo'
+
+const formatoDia = new Intl.DateTimeFormat('en-CA', {
+  timeZone: FUSO,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
+const formatoHora = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: FUSO,
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+const formatoPartes = new Intl.DateTimeFormat('en-US', {
+  timeZone: FUSO,
+  hourCycle: 'h23',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+})
+
+export function hoje(): string {
+  return formatoDia.format(new Date())
+}
+
+export function formatarHora(instante: string): string {
+  return formatoHora.format(new Date(instante))
+}
+
+function deslocamentoEmMs(instante: number): number {
+  const partes = formatoPartes.formatToParts(new Date(instante))
+
+  const valor = (tipo: string): number =>
+    Number(partes.find((parte) => parte.type === tipo)?.value)
+
+  const comoUtc = Date.UTC(
+    valor('year'),
+    valor('month') - 1,
+    valor('day'),
+    valor('hour'),
+    valor('minute'),
+    valor('second'),
+  )
+
+  return comoUtc - Math.floor(instante / 1000) * 1000
+}
+
+export function montarInstante(dia: string, hora: string): string | null {
+  const partesDia = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dia)
+  const partesHora = /^(\d{2}):(\d{2})$/.exec(hora)
+
+  if (partesDia === null || partesHora === null) {
+    return null
+  }
+
+  const alvo = Date.UTC(
+    Number(partesDia[1]),
+    Number(partesDia[2]) - 1,
+    Number(partesDia[3]),
+    Number(partesHora[1]),
+    Number(partesHora[2]),
+  )
+
+  let instante = alvo - deslocamentoEmMs(alvo)
+
+  instante = alvo - deslocamentoEmMs(instante)
+
+  return new Date(instante).toISOString()
+}
