@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router'
 import { AgendaDia } from './components/AgendaDia'
 import { CancelarConsulta } from './components/CancelarConsulta'
@@ -11,8 +12,28 @@ import { PacienteCarregado } from './components/PacienteCarregado'
 import { PacienteFicha } from './components/PacienteFicha'
 import { PacienteForm } from './components/PacienteForm'
 import { PacientesList } from './components/PacientesList'
+import { Carregado } from './components/Carregado'
+import { DentistaFicha } from './components/DentistaFicha'
+import { DentistaForm } from './components/DentistaForm'
+import { DentistasList } from './components/DentistasList'
+import { OrcamentoFicha } from './components/OrcamentoFicha'
+import { OrcamentoNovo } from './components/OrcamentoNovo'
+import { OrcamentosList } from './components/OrcamentosList'
+import { ProcedimentoForm } from './components/ProcedimentoForm'
+import { ProcedimentosList } from './components/ProcedimentosList'
+import { RetornoAcao } from './components/RetornoAcao'
+import { RetornosPaciente } from './components/RetornosPaciente'
+import { RetornosPainel } from './components/RetornosPainel'
+import { VisitaFicha } from './components/VisitaFicha'
+import { VisitaForm } from './components/VisitaForm'
+import { VisitasList } from './components/VisitasList'
 import { ErroApi, chamarApi } from './services/api'
+import type { Dentista } from './types/Dentista'
+import type { Orcamento } from './types/Orcamento'
+import type { Procedimento } from './types/Procedimento'
+import type { Retorno } from './types/Retorno'
 import type { Usuario } from './types/Usuario'
+import type { Visita } from './types/Visita'
 
 function App() {
   const [usuario, setUsuario] = useState<Usuario | null>(null)
@@ -57,6 +78,22 @@ function App() {
     setUsuario(null)
   }
 
+  function pagina(
+    elemento: (autenticado: Usuario) => ReactNode,
+    proibidos: Usuario['perfil'][] = [],
+    destino = '/agenda',
+  ) {
+    if (!usuario) {
+      return <Navigate to="/login" replace />
+    }
+
+    if (proibidos.includes(usuario.perfil)) {
+      return <Navigate to={destino} replace />
+    }
+
+    return elemento(usuario)
+  }
+
   if (carregando) {
     return <p className="container py-4 text-secondary">Carregando...</p>
   }
@@ -97,6 +134,36 @@ function App() {
               <li className="nav-item">
                 <NavLink to="/pacientes" className="nav-link">
                   Pacientes
+                </NavLink>
+              </li>
+
+              <li className="nav-item">
+                <NavLink to="/dentistas" className="nav-link">
+                  Dentistas
+                </NavLink>
+              </li>
+
+              <li className="nav-item">
+                <NavLink to="/visitas" className="nav-link">
+                  Visitas
+                </NavLink>
+              </li>
+
+              <li className="nav-item">
+                <NavLink to="/retornos" className="nav-link">
+                  Retornos
+                </NavLink>
+              </li>
+
+              <li className="nav-item">
+                <NavLink to="/procedimentos" className="nav-link">
+                  Catálogo
+                </NavLink>
+              </li>
+
+              <li className="nav-item">
+                <NavLink to="/orcamentos" className="nav-link">
+                  Orçamentos
                 </NavLink>
               </li>
             </ul>
@@ -291,6 +358,328 @@ function App() {
                 </PacienteCarregado>
               )
             }
+          />
+
+          <Route
+            path="/dentistas"
+            element={pagina((u) => (
+              <DentistasList usuario={u} onSessaoExpirada={sessaoExpirada} />
+            ))}
+          />
+
+          <Route
+            path="/dentistas/novo"
+            element={pagina(
+              () => (
+                <>
+                  <h2 className="h5 mb-3">Novo dentista</h2>
+                  <DentistaForm onSessaoExpirada={sessaoExpirada} />
+                </>
+              ),
+              ['SECRETARIA', 'DENTISTA'],
+              '/dentistas',
+            )}
+          />
+
+          <Route
+            path="/dentistas/:id"
+            element={pagina((u) => (
+              <Carregado<Dentista>
+                key="dentista-ficha"
+                titulo="Dentista"
+                base="/dentistas"
+                voltarPara="/dentistas"
+                voltarRotulo="Voltar aos dentistas"
+                mensagemPadrao="Não foi possível carregar o dentista."
+                onSessaoExpirada={sessaoExpirada}
+              >
+                {(dentista, recarregar) => (
+                  <DentistaFicha
+                    usuario={u}
+                    dentista={dentista}
+                    onRecarregar={recarregar}
+                    onSessaoExpirada={sessaoExpirada}
+                  />
+                )}
+              </Carregado>
+            ))}
+          />
+
+          <Route
+            path="/dentistas/:id/editar"
+            element={pagina(
+              () => (
+                <Carregado<Dentista>
+                  key="dentista-editar"
+                  titulo="Editar dentista"
+                  base="/dentistas"
+                  voltarPara="/dentistas"
+                  voltarRotulo="Voltar aos dentistas"
+                  mensagemPadrao="Não foi possível carregar o dentista."
+                  onSessaoExpirada={sessaoExpirada}
+                >
+                  {(dentista) => (
+                    <DentistaForm
+                      dentista={dentista}
+                      onSessaoExpirada={sessaoExpirada}
+                    />
+                  )}
+                </Carregado>
+              ),
+              ['SECRETARIA', 'DENTISTA'],
+              '/dentistas',
+            )}
+          />
+
+          <Route
+            path="/visitas"
+            element={pagina((u) => (
+              <VisitasList usuario={u} onSessaoExpirada={sessaoExpirada} />
+            ))}
+          />
+
+          <Route
+            path="/visitas/nova"
+            element={pagina(
+              () => (
+                <>
+                  <h2 className="h5 mb-3">Nova visita</h2>
+                  <VisitaForm onSessaoExpirada={sessaoExpirada} />
+                </>
+              ),
+              ['SECRETARIA'],
+              '/visitas',
+            )}
+          />
+
+          <Route
+            path="/visitas/:id"
+            element={pagina((u) => (
+              <Carregado<Visita>
+                key="visita-ficha"
+                titulo="Visita"
+                base="/historico-visitas"
+                voltarPara="/visitas"
+                voltarRotulo="Voltar às visitas"
+                mensagemPadrao="Não foi possível carregar a visita."
+                onSessaoExpirada={sessaoExpirada}
+              >
+                {(visita) => <VisitaFicha usuario={u} visita={visita} />}
+              </Carregado>
+            ))}
+          />
+
+          <Route
+            path="/visitas/:id/editar"
+            element={pagina(
+              () => (
+                <Carregado<Visita>
+                  key="visita-editar"
+                  titulo="Editar visita"
+                  base="/historico-visitas"
+                  voltarPara="/visitas"
+                  voltarRotulo="Voltar às visitas"
+                  mensagemPadrao="Não foi possível carregar a visita."
+                  onSessaoExpirada={sessaoExpirada}
+                >
+                  {(visita) => (
+                    <VisitaForm
+                      visita={visita}
+                      onSessaoExpirada={sessaoExpirada}
+                    />
+                  )}
+                </Carregado>
+              ),
+              ['SECRETARIA'],
+              '/visitas',
+            )}
+          />
+
+          <Route
+            path="/visitas/:id/retorno"
+            element={pagina(
+              () => (
+                <Carregado<Visita>
+                  key="visita-retorno"
+                  titulo="Criar retorno"
+                  base="/historico-visitas"
+                  voltarPara="/retornos"
+                  voltarRotulo="Voltar aos retornos"
+                  mensagemPadrao="Não foi possível carregar a visita."
+                  onSessaoExpirada={sessaoExpirada}
+                >
+                  {(visita) => (
+                    <RetornoAcao
+                      modo="criar"
+                      visita={visita}
+                      onSessaoExpirada={sessaoExpirada}
+                    />
+                  )}
+                </Carregado>
+              ),
+              ['SECRETARIA'],
+              '/retornos',
+            )}
+          />
+
+          <Route
+            path="/retornos"
+            element={pagina((u) => (
+              <RetornosPainel usuario={u} onSessaoExpirada={sessaoExpirada} />
+            ))}
+          />
+
+          <Route
+            path="/retornos/paciente/:id"
+            element={pagina((u) => (
+              <RetornosPaciente usuario={u} onSessaoExpirada={sessaoExpirada} />
+            ))}
+          />
+
+          <Route
+            path="/retornos/:id/corrigir"
+            element={pagina(
+              () => (
+                <Carregado<Retorno>
+                  key="retorno-corrigir"
+                  titulo="Corrigir data do retorno"
+                  base="/retornos"
+                  voltarPara="/retornos"
+                  voltarRotulo="Voltar aos retornos"
+                  mensagemPadrao="Não foi possível carregar o retorno."
+                  onSessaoExpirada={sessaoExpirada}
+                >
+                  {(retorno) => (
+                    <RetornoAcao
+                      modo="corrigir"
+                      retorno={retorno}
+                      onSessaoExpirada={sessaoExpirada}
+                    />
+                  )}
+                </Carregado>
+              ),
+              ['SECRETARIA'],
+              '/retornos',
+            )}
+          />
+
+          <Route
+            path="/retornos/:id/descartar"
+            element={pagina(
+              () => (
+                <Carregado<Retorno>
+                  key="retorno-descartar"
+                  titulo="Descartar retorno"
+                  base="/retornos"
+                  voltarPara="/retornos"
+                  voltarRotulo="Voltar aos retornos"
+                  mensagemPadrao="Não foi possível carregar o retorno."
+                  onSessaoExpirada={sessaoExpirada}
+                >
+                  {(retorno) => (
+                    <RetornoAcao
+                      modo="descartar"
+                      retorno={retorno}
+                      onSessaoExpirada={sessaoExpirada}
+                    />
+                  )}
+                </Carregado>
+              ),
+              ['SECRETARIA', 'DENTISTA'],
+              '/retornos',
+            )}
+          />
+
+          <Route
+            path="/procedimentos"
+            element={pagina((u) => (
+              <ProcedimentosList usuario={u} onSessaoExpirada={sessaoExpirada} />
+            ))}
+          />
+
+          <Route
+            path="/procedimentos/novo"
+            element={pagina(
+              () => (
+                <>
+                  <h2 className="h5 mb-3">Novo procedimento</h2>
+                  <ProcedimentoForm onSessaoExpirada={sessaoExpirada} />
+                </>
+              ),
+              ['SECRETARIA'],
+              '/procedimentos',
+            )}
+          />
+
+          <Route
+            path="/procedimentos/:id/editar"
+            element={pagina(
+              () => (
+                <Carregado<Procedimento>
+                  key="procedimento-editar"
+                  titulo="Editar procedimento"
+                  base="/procedimentos"
+                  voltarPara="/procedimentos"
+                  voltarRotulo="Voltar ao catálogo"
+                  mensagemPadrao="Não foi possível carregar o procedimento."
+                  onSessaoExpirada={sessaoExpirada}
+                >
+                  {(procedimento) => (
+                    <ProcedimentoForm
+                      procedimento={procedimento}
+                      onSessaoExpirada={sessaoExpirada}
+                    />
+                  )}
+                </Carregado>
+              ),
+              ['SECRETARIA'],
+              '/procedimentos',
+            )}
+          />
+
+          <Route
+            path="/orcamentos"
+            element={pagina((u) => (
+              <OrcamentosList usuario={u} onSessaoExpirada={sessaoExpirada} />
+            ))}
+          />
+
+          <Route
+            path="/orcamentos/novo"
+            element={pagina(
+              () => (
+                <>
+                  <h2 className="h5 mb-3">Novo orçamento</h2>
+                  <OrcamentoNovo onSessaoExpirada={sessaoExpirada} />
+                </>
+              ),
+              ['SECRETARIA'],
+              '/orcamentos',
+            )}
+          />
+
+          <Route
+            path="/orcamentos/:id"
+            element={pagina((u) => (
+              <Carregado<Orcamento>
+                key="orcamento-ficha"
+                titulo="Orçamento"
+                base="/orcamentos"
+                voltarPara="/orcamentos"
+                voltarRotulo="Voltar aos orçamentos"
+                mensagemPadrao="Não foi possível carregar o orçamento."
+                onSessaoExpirada={sessaoExpirada}
+              >
+                {(orcamento, recarregar) => (
+                  <OrcamentoFicha
+                    usuario={u}
+                    orcamento={orcamento}
+                    onRecarregar={recarregar}
+                    onSessaoExpirada={sessaoExpirada}
+                  />
+                )}
+              </Carregado>
+            ))}
           />
 
           <Route path="*" element={<Navigate to="/" replace />} />
