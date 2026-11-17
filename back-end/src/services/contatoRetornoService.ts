@@ -1,9 +1,11 @@
 import * as repository from "../repositories/contatoRetornoRepository.ts";
 import * as pacienteRepository from "../repositories/pacienteRepository.ts";
+import * as acessoService from "./acessoService.ts";
 
 import {
   Perfil,
   ResultadoContatoRetorno,
+  TipoAcessoPaciente,
 } from "../../generated/prisma/client.ts";
 
 import type { UsuarioAutenticado } from "./consultaService.ts";
@@ -73,6 +75,14 @@ export async function findAll(
 
   const contatos = await repository.findByPaciente(paciente_id);
   const incluirAnotacao = podeVerAnotacao(usuario);
+
+  if (contatos.length > 0) {
+    await acessoService.registrarLista(
+      usuario,
+      TipoAcessoPaciente.LISTA_CONTATOS,
+      [paciente_id]
+    );
+  }
 
   return contatos.map((contato) => paraResposta(contato, incluirAnotacao));
 }

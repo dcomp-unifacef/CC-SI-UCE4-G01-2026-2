@@ -41,7 +41,8 @@ export async function index(
 ): Promise<void> {
   try {
     const consultas = await service.findAll(
-      req.query as Record<string, unknown>
+      req.query as Record<string, unknown>,
+      res.locals.usuario
     );
 
 
@@ -59,7 +60,10 @@ export async function retrieve(
   next: NextFunction
 ): Promise<void> {
   try {
-    const consulta = await service.findById(Number(req.params.id));
+    const consulta = await service.findById(
+      Number(req.params.id),
+      res.locals.usuario
+    );
 
 
     res.json(consulta);

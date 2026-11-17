@@ -4,11 +4,13 @@ import * as configuracaoRepository from "../repositories/configuracaoRepository.
 import * as pacienteRepository from "../repositories/pacienteRepository.ts";
 import * as dentistaRepository from "../repositories/dentistaRepository.ts";
 import * as procedimentoService from "./procedimentoService.ts";
+import * as acessoService from "./acessoService.ts";
 
 import {
   MotivoConsulta,
   Perfil,
   StatusConsulta,
+  TipoAcessoPaciente,
   TipoHistoricoConsulta,
 } from "../../generated/prisma/client.ts";
 
@@ -275,6 +277,24 @@ async function buscarOuFalhar(id: number): Promise<ConsultaCompleta> {
 
 
 export async function findAll(
+  query: Record<string, unknown>,
+  usuario: UsuarioAutenticado
+): Promise<ConsultaRespostaDto[]> {
+  const respostas = await listar(query);
+
+  if (respostas.length > 0) {
+    await acessoService.registrarLista(
+      usuario,
+      TipoAcessoPaciente.LISTA_CONSULTAS,
+      respostas.map((consulta) => consulta.paciente.id)
+    );
+  }
+
+  return respostas;
+}
+
+
+async function listar(
   query: Record<string, unknown>
 ): Promise<ConsultaRespostaDto[]> {
   const paciente_id = idDaQuery(query, "paciente_id");
@@ -346,8 +366,19 @@ export async function findAll(
 }
 
 
-export async function findById(id: number): Promise<ConsultaRespostaDto> {
-  return paraResposta(await buscarOuFalhar(id));
+export async function findById(
+  id: number,
+  usuario: UsuarioAutenticado
+): Promise<ConsultaRespostaDto> {
+  const consulta = await buscarOuFalhar(id);
+
+  await acessoService.registrar(
+    usuario,
+    TipoAcessoPaciente.CONSULTA,
+    consulta.paciente.id
+  );
+
+  return paraResposta(consulta);
 }
 
 
@@ -407,7 +438,13 @@ export async function historico(
   id: number,
   usuario: UsuarioAutenticado
 ): Promise<HistoricoConsultaRespostaDto[]> {
-  await buscarOuFalhar(id);
+  const consulta = await buscarOuFalhar(id);
+
+  await acessoService.registrar(
+    usuario,
+    TipoAcessoPaciente.HISTORICO_CONSULTA,
+    consulta.paciente.id
+  );
 
   const registros = await historicoRepository.findByConsulta(id);
   const incluirTexto = podeVerTextoDoMotivo(usuario);

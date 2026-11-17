@@ -61,7 +61,8 @@ export async function atrasos(
 ): Promise<void> {
   try {
     const lista = await service.atrasos(
-      req.query as Record<string, unknown>
+      req.query as Record<string, unknown>,
+      res.locals.usuario
     );
 
 

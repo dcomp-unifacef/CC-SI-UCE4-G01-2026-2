@@ -1,8 +1,13 @@
 import * as repository from "../repositories/retornoRepository.ts";
 import * as historicoRepository from "../repositories/historicoRetornoRepository.ts";
 import * as visitaRepository from "../repositories/historicoVisitaRepository.ts";
+import * as acessoService from "./acessoService.ts";
 
-import { Perfil, SituacaoRetorno } from "../../generated/prisma/client.ts";
+import {
+  Perfil,
+  SituacaoRetorno,
+  TipoAcessoPaciente,
+} from "../../generated/prisma/client.ts";
 
 import type {
   ResultadoDoRetorno,
@@ -148,6 +153,14 @@ export async function findAll(
 
   const incluirMotivo = podeVerMotivos(usuario);
 
+  if (retornos.length > 0) {
+    await acessoService.registrarLista(
+      usuario,
+      TipoAcessoPaciente.LISTA_RETORNOS,
+      retornos.map((retorno) => retorno.paciente.id)
+    );
+  }
+
   return retornos.map((retorno) => paraResposta(retorno, incluirMotivo));
 }
 
@@ -156,12 +169,21 @@ export async function findById(
   id: number,
   usuario: UsuarioAutenticado
 ): Promise<RetornoRespostaDto> {
-  return paraResposta(await buscarOuFalhar(id), podeVerMotivos(usuario));
+  const retorno = await buscarOuFalhar(id);
+
+  await acessoService.registrar(
+    usuario,
+    TipoAcessoPaciente.RETORNO,
+    retorno.paciente.id
+  );
+
+  return paraResposta(retorno, podeVerMotivos(usuario));
 }
 
 
 export async function atrasos(
-  query: Record<string, unknown>
+  query: Record<string, unknown>,
+  usuario: UsuarioAutenticado
 ): Promise<AtrasoRetornoRespostaDto[]> {
   const texto = query.meses;
   let meses = 6;
@@ -179,7 +201,7 @@ export async function atrasos(
 
   const ultimas = await visitaRepository.findUltimasVisitasDePacientesAtivos();
 
-  return ultimas
+  const lista = ultimas
     .filter((visita) => visita.data_visita.getTime() < limite.getTime())
     .sort(
       (a, b) =>
@@ -221,6 +243,16 @@ export async function atrasos(
           ),
       };
     });
+
+  if (lista.length > 0) {
+    await acessoService.registrarLista(
+      usuario,
+      TipoAcessoPaciente.LISTA_ATRASOS,
+      lista.map((item) => item.paciente.id)
+    );
+  }
+
+  return lista;
 }
 
 
@@ -228,7 +260,13 @@ export async function historico(
   id: number,
   usuario: UsuarioAutenticado
 ): Promise<HistoricoRetornoRespostaDto[]> {
-  await buscarOuFalhar(id);
+  const retorno = await buscarOuFalhar(id);
+
+  await acessoService.registrar(
+    usuario,
+    TipoAcessoPaciente.HISTORICO_RETORNO,
+    retorno.paciente.id
+  );
 
   const registros = await historicoRepository.findByRetorno(id);
   const incluirMotivo = podeVerMotivos(usuario);
