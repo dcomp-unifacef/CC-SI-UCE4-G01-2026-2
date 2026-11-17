@@ -7,6 +7,9 @@ import { ConsultaForm } from './components/ConsultaForm'
 import { RealizarConsulta } from './components/RealizarConsulta'
 import { ReagendarConsulta } from './components/ReagendarConsulta'
 import { Login } from './components/Login'
+import { PacienteCarregado } from './components/PacienteCarregado'
+import { PacienteFicha } from './components/PacienteFicha'
+import { PacienteForm } from './components/PacienteForm'
 import { PacientesList } from './components/PacientesList'
 import { ErroApi, chamarApi } from './services/api'
 import type { Usuario } from './types/Usuario'
@@ -221,9 +224,71 @@ function App() {
             path="/pacientes"
             element={
               usuario ? (
-                <PacientesList onSessaoExpirada={sessaoExpirada} />
+                <PacientesList
+                  usuario={usuario}
+                  onSessaoExpirada={sessaoExpirada}
+                />
               ) : (
                 <Navigate to="/login" replace />
+              )
+            }
+          />
+
+          <Route
+            path="/pacientes/novo"
+            element={
+              !usuario ? (
+                <Navigate to="/login" replace />
+              ) : usuario.perfil === 'DENTISTA' ? (
+                <Navigate to="/pacientes" replace />
+              ) : (
+                <>
+                  <h2 className="h5 mb-3">Novo paciente</h2>
+                  <PacienteForm onSessaoExpirada={sessaoExpirada} />
+                </>
+              )
+            }
+          />
+
+          <Route
+            path="/pacientes/:id"
+            element={
+              usuario ? (
+                <PacienteCarregado
+                  key="ficha"
+                  titulo="Paciente"
+                  onSessaoExpirada={sessaoExpirada}
+                >
+                  {(paciente) => (
+                    <PacienteFicha usuario={usuario} paciente={paciente} />
+                  )}
+                </PacienteCarregado>
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+
+          <Route
+            path="/pacientes/:id/editar"
+            element={
+              !usuario ? (
+                <Navigate to="/login" replace />
+              ) : usuario.perfil === 'DENTISTA' ? (
+                <Navigate to="/pacientes" replace />
+              ) : (
+                <PacienteCarregado
+                  key="editar"
+                  titulo="Editar paciente"
+                  onSessaoExpirada={sessaoExpirada}
+                >
+                  {(paciente) => (
+                    <PacienteForm
+                      paciente={paciente}
+                      onSessaoExpirada={sessaoExpirada}
+                    />
+                  )}
+                </PacienteCarregado>
               )
             }
           />

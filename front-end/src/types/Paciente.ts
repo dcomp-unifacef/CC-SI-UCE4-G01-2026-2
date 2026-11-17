@@ -13,3 +13,12 @@ export type Paciente = {
   email: string | null
   ativo: boolean
 }
+
+export type PacienteComConsentimento = Paciente & {
+  consentimento: {
+    situacao: 'SEM_REGISTRO' | 'CONCEDIDO' | 'REVOGADO'
+    termo: string | null
+    registrado_em: string | null
+    registrado_por: { id: number; nome: string } | null
+  }
+}
