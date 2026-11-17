@@ -121,11 +121,3 @@ O backup com as ferramentas do PostgreSQL foi verificado no Windows. Em outros s
 
 - `VITE_API_BASE`: o endereço da API, por exemplo `http://localhost:8888`.
 
-## Pendências
-
-- A restauração de backup pela tela não foi feita. O backup só funciona se `BACKUP_DIR` e `PG_BIN_DIR` estiverem configurados.
-- Na acessibilidade, as letras e os botões foram aumentados, mas não foi testado se a recepcionista consegue usar o sistema sem ajuda.
-- Não foi testado com HTTPS nem com o cookie `Secure`. Os testes foram feitos só com HTTP no computador.
-- Não foi testado em outros navegadores, no celular de verdade, com leitor de tela nem com o PDF impresso no papel.
-- A agenda não atualiza sozinha. Para ver consultas novas, é preciso recarregar a tela.
-- O botão de excluir paciente não aparece na tela. Para tirar um paciente de uso, a gente desativa o cadastro.
