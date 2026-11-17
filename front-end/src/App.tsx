@@ -33,6 +33,7 @@ import { LogAcessoPainel } from './components/LogAcessoPainel'
 import { UsuarioFicha } from './components/UsuarioFicha'
 import { UsuarioForm } from './components/UsuarioForm'
 import { UsuariosList } from './components/UsuariosList'
+import { TrocarSenha } from './components/TrocarSenha'
 import { ErroApi, chamarApi } from './services/api'
 import type { Dentista } from './types/Dentista'
 import type { Orcamento } from './types/Orcamento'
@@ -63,6 +64,11 @@ function App() {
   const sessaoExpirada = useCallback(() => {
     setUsuario(null)
     setAviso('Sua sessão expirou. Entre novamente.')
+  }, [])
+
+  const senhaTrocada = useCallback(() => {
+    setUsuario(null)
+    setAviso('Senha alterada. Suas sessões foram encerradas: entre com a nova senha.')
   }, [])
 
   function entrar(autenticado: Usuario) {
@@ -116,6 +122,9 @@ function App() {
               <span>
                 {usuario.nome} ({usuario.perfil})
               </span>
+              <NavLink to="/senha" className="btn btn-outline-light btn-sm">
+                Alterar senha
+              </NavLink>
               <button
                 type="button"
                 className="btn btn-outline-light btn-sm"
@@ -816,6 +825,16 @@ function App() {
               () => <LogAcessoPainel onSessaoExpirada={sessaoExpirada} />,
               ['SECRETARIA', 'DENTISTA'],
             )}
+          />
+
+          <Route
+            path="/senha"
+            element={pagina(() => (
+              <TrocarSenha
+                onSenhaTrocada={senhaTrocada}
+                onSessaoExpirada={sessaoExpirada}
+              />
+            ))}
           />
 
           <Route path="*" element={<Navigate to="/" replace />} />
