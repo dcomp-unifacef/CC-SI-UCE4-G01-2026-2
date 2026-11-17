@@ -27,12 +27,19 @@ import { RetornosPainel } from './components/RetornosPainel'
 import { VisitaFicha } from './components/VisitaFicha'
 import { VisitaForm } from './components/VisitaForm'
 import { VisitasList } from './components/VisitasList'
+import { BackupsPainel } from './components/BackupsPainel'
+import { ConfiguracoesForm } from './components/ConfiguracoesForm'
+import { LogAcessoPainel } from './components/LogAcessoPainel'
+import { UsuarioFicha } from './components/UsuarioFicha'
+import { UsuarioForm } from './components/UsuarioForm'
+import { UsuariosList } from './components/UsuariosList'
 import { ErroApi, chamarApi } from './services/api'
 import type { Dentista } from './types/Dentista'
 import type { Orcamento } from './types/Orcamento'
 import type { Procedimento } from './types/Procedimento'
 import type { Retorno } from './types/Retorno'
 import type { Usuario } from './types/Usuario'
+import type { UsuarioAdmin } from './types/UsuarioAdmin'
 import type { Visita } from './types/Visita'
 
 function App() {
@@ -166,6 +173,34 @@ function App() {
                   Orçamentos
                 </NavLink>
               </li>
+
+              {usuario.perfil === 'DONO' && (
+                <>
+                  <li className="nav-item">
+                    <NavLink to="/usuarios" className="nav-link">
+                      Usuários
+                    </NavLink>
+                  </li>
+
+                  <li className="nav-item">
+                    <NavLink to="/configuracoes" className="nav-link">
+                      Configurações
+                    </NavLink>
+                  </li>
+
+                  <li className="nav-item">
+                    <NavLink to="/backups" className="nav-link">
+                      Backup
+                    </NavLink>
+                  </li>
+
+                  <li className="nav-item">
+                    <NavLink to="/log-acesso" className="nav-link">
+                      Log de acesso
+                    </NavLink>
+                  </li>
+                </>
+              )}
             </ul>
           </div>
         </nav>
@@ -327,7 +362,11 @@ function App() {
                   onSessaoExpirada={sessaoExpirada}
                 >
                   {(paciente) => (
-                    <PacienteFicha usuario={usuario} paciente={paciente} />
+                    <PacienteFicha
+                      usuario={usuario}
+                      paciente={paciente}
+                      onSessaoExpirada={sessaoExpirada}
+                    />
                   )}
                 </PacienteCarregado>
               ) : (
@@ -680,6 +719,103 @@ function App() {
                 )}
               </Carregado>
             ))}
+          />
+
+          <Route
+            path="/usuarios"
+            element={pagina(
+              () => <UsuariosList onSessaoExpirada={sessaoExpirada} />,
+              ['SECRETARIA', 'DENTISTA'],
+            )}
+          />
+
+          <Route
+            path="/usuarios/novo"
+            element={pagina(
+              () => (
+                <>
+                  <h2 className="h5 mb-3">Novo usuário</h2>
+                  <UsuarioForm onSessaoExpirada={sessaoExpirada} />
+                </>
+              ),
+              ['SECRETARIA', 'DENTISTA'],
+            )}
+          />
+
+          <Route
+            path="/usuarios/:id"
+            element={pagina(
+              (u) => (
+                <Carregado<UsuarioAdmin>
+                  key="usuario-ficha"
+                  titulo="Usuário"
+                  base="/usuarios"
+                  voltarPara="/usuarios"
+                  voltarRotulo="Voltar aos usuários"
+                  mensagemPadrao="Não foi possível carregar o usuário."
+                  onSessaoExpirada={sessaoExpirada}
+                >
+                  {(alvo, recarregar) => (
+                    <UsuarioFicha
+                      usuario={u}
+                      alvo={alvo}
+                      onRecarregar={recarregar}
+                      onSessaoExpirada={sessaoExpirada}
+                    />
+                  )}
+                </Carregado>
+              ),
+              ['SECRETARIA', 'DENTISTA'],
+            )}
+          />
+
+          <Route
+            path="/usuarios/:id/editar"
+            element={pagina(
+              () => (
+                <Carregado<UsuarioAdmin>
+                  key="usuario-editar"
+                  titulo="Editar usuário"
+                  base="/usuarios"
+                  voltarPara="/usuarios"
+                  voltarRotulo="Voltar aos usuários"
+                  mensagemPadrao="Não foi possível carregar o usuário."
+                  onSessaoExpirada={sessaoExpirada}
+                >
+                  {(alvo) => (
+                    <UsuarioForm
+                      alvo={alvo}
+                      onSessaoExpirada={sessaoExpirada}
+                    />
+                  )}
+                </Carregado>
+              ),
+              ['SECRETARIA', 'DENTISTA'],
+            )}
+          />
+
+          <Route
+            path="/configuracoes"
+            element={pagina(
+              () => <ConfiguracoesForm onSessaoExpirada={sessaoExpirada} />,
+              ['SECRETARIA', 'DENTISTA'],
+            )}
+          />
+
+          <Route
+            path="/backups"
+            element={pagina(
+              () => <BackupsPainel onSessaoExpirada={sessaoExpirada} />,
+              ['SECRETARIA', 'DENTISTA'],
+            )}
+          />
+
+          <Route
+            path="/log-acesso"
+            element={pagina(
+              () => <LogAcessoPainel onSessaoExpirada={sessaoExpirada} />,
+              ['SECRETARIA', 'DENTISTA'],
+            )}
           />
 
           <Route path="*" element={<Navigate to="/" replace />} />

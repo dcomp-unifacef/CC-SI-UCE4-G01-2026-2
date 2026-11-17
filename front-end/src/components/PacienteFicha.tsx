@@ -1,18 +1,14 @@
 import { Link } from 'react-router'
 import { formatarCpf } from '../utils/formatos'
-import { formatarDataHora, formatarDiaCivil } from '../utils/datas'
+import { formatarDiaCivil } from '../utils/datas'
+import { ConsentimentoPaciente } from './ConsentimentoPaciente'
 import type { PacienteComConsentimento } from '../types/Paciente'
 import type { Usuario } from '../types/Usuario'
 
 type PacienteFichaProps = {
   usuario: Usuario
   paciente: PacienteComConsentimento
-}
-
-const CONSENTIMENTO = {
-  SEM_REGISTRO: 'Sem registro',
-  CONCEDIDO: 'Concedido',
-  REVOGADO: 'Revogado',
+  onSessaoExpirada: () => void
 }
 
 function valor(texto: string | null): string {
@@ -30,9 +26,12 @@ function endereco(paciente: PacienteComConsentimento): string {
   )
 }
 
-export function PacienteFicha({ usuario, paciente }: PacienteFichaProps) {
+export function PacienteFicha({
+  usuario,
+  paciente,
+  onSessaoExpirada,
+}: PacienteFichaProps) {
   const gestao = usuario.perfil !== 'DENTISTA'
-  const consentimento = paciente.consentimento
 
   return (
     <>
@@ -51,14 +50,6 @@ export function PacienteFicha({ usuario, paciente }: PacienteFichaProps) {
         <dd className="col-sm-9">{endereco(paciente)}</dd>
         <dt className="col-sm-3">Situação</dt>
         <dd className="col-sm-9">{paciente.ativo ? 'Ativo' : 'Desativado'}</dd>
-        <dt className="col-sm-3">Consentimento</dt>
-        <dd className="col-sm-9">
-          {CONSENTIMENTO[consentimento.situacao]}
-          {consentimento.registrado_em !== null &&
-            ` em ${formatarDataHora(consentimento.registrado_em)}`}
-          {consentimento.registrado_por !== null &&
-            ` por ${consentimento.registrado_por.nome}`}
-        </dd>
       </dl>
 
       <div className="d-flex gap-2">
@@ -74,6 +65,12 @@ export function PacienteFicha({ usuario, paciente }: PacienteFichaProps) {
           Voltar
         </Link>
       </div>
+
+      <ConsentimentoPaciente
+        pacienteId={paciente.id}
+        inicial={paciente.consentimento}
+        onSessaoExpirada={onSessaoExpirada}
+      />
     </>
   )
 }

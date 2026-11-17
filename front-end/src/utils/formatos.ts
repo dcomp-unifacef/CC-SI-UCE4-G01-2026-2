@@ -17,6 +17,34 @@ export function formatarReais(centavos: number): string {
   return moeda.format(centavos / 100)
 }
 
+export function rotuloPerfil(perfil: string): string {
+  if (perfil === 'DONO') {
+    return 'Dono'
+  }
+
+  if (perfil === 'DENTISTA') {
+    return 'Dentista'
+  }
+
+  if (perfil === 'SECRETARIA') {
+    return 'Secretária'
+  }
+
+  return perfil
+}
+
+export function formatarTamanho(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1).replace('.', ',')} KB`
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`
+}
+
 export function lerReais(texto: string): number | null {
   const limpo = texto.trim().replace(/\s/g, '').replace(/^R\$/, '')
 
