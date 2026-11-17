@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import { formatarCpf } from '../utils/formatos'
 import { formatarDiaCivil } from '../utils/datas'
 import { ConsentimentoPaciente } from './ConsentimentoPaciente'
+import { UltimaVisita } from './UltimaVisita'
 import type { PacienteComConsentimento } from '../types/Paciente'
 import type { Usuario } from '../types/Usuario'
 
@@ -65,6 +66,11 @@ export function PacienteFicha({
           Voltar
         </Link>
       </div>
+
+      <UltimaVisita
+        pacienteId={paciente.id}
+        onSessaoExpirada={onSessaoExpirada}
+      />
 
       <ConsentimentoPaciente
         pacienteId={paciente.id}

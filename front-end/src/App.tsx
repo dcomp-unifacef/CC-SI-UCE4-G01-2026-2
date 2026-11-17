@@ -34,6 +34,7 @@ import { UsuarioFicha } from './components/UsuarioFicha'
 import { UsuarioForm } from './components/UsuarioForm'
 import { UsuariosList } from './components/UsuariosList'
 import { TrocarSenha } from './components/TrocarSenha'
+import { ConsultaHistorico } from './components/ConsultaHistorico'
 import { ErroApi, chamarApi } from './services/api'
 import type { Dentista } from './types/Dentista'
 import type { Orcamento } from './types/Orcamento'
@@ -113,12 +114,12 @@ function App() {
 
   return (
     <BrowserRouter>
-      <header className="bg-dark text-white py-3">
-        <div className="container d-flex justify-content-between align-items-center">
+      <header className="bg-dark text-white py-3 d-print-none">
+        <div className="container d-flex justify-content-between align-items-center flex-wrap gap-2">
           <h1 className="h4 mb-0">OdontoSystem</h1>
 
           {usuario && (
-            <div className="d-flex align-items-center gap-3">
+            <div className="d-flex align-items-center flex-wrap gap-2">
               <span>
                 {usuario.nome} ({usuario.perfil})
               </span>
@@ -138,7 +139,7 @@ function App() {
       </header>
 
       {usuario && (
-        <nav className="bg-light border-bottom py-2">
+        <nav className="bg-light border-bottom py-2 d-print-none">
           <div className="container">
             <ul className="nav nav-pills">
               <li className="nav-item">
@@ -332,6 +333,13 @@ function App() {
           />
 
           <Route
+            path="/agenda/:id/historico"
+            element={pagina(() => (
+              <ConsultaHistorico onSessaoExpirada={sessaoExpirada} />
+            ))}
+          />
+
+          <Route
             path="/pacientes"
             element={
               usuario ? (
@@ -512,7 +520,13 @@ function App() {
                 mensagemPadrao="Não foi possível carregar a visita."
                 onSessaoExpirada={sessaoExpirada}
               >
-                {(visita) => <VisitaFicha usuario={u} visita={visita} />}
+                {(visita) => (
+                  <VisitaFicha
+                    usuario={u}
+                    visita={visita}
+                    onSessaoExpirada={sessaoExpirada}
+                  />
+                )}
               </Carregado>
             ))}
           />

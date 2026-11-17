@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { ErroApi, chamarApi, mensagemDoErro } from '../services/api'
+import { ExcluirRegistro } from './ExcluirRegistro'
 import type { Dentista } from '../types/Dentista'
 import type { Usuario } from '../types/Usuario'
 
@@ -89,6 +90,16 @@ export function DentistaFicha({
           Voltar
         </Link>
       </div>
+
+      {dono && (
+        <ExcluirRegistro
+          rotulo="Excluir dentista"
+          aviso="A exclusão é definitiva. Dentistas com visitas, consultas ou orçamentos não podem ser excluídos; nesse caso, desative o dentista."
+          caminho={`/dentistas/${dentista.id}`}
+          destino="/dentistas"
+          onSessaoExpirada={onSessaoExpirada}
+        />
+      )}
     </>
   )
 }

@@ -1,14 +1,20 @@
 import { Link } from 'react-router'
 import { formatarDiaCivil } from '../utils/datas'
+import { ExcluirRegistro } from './ExcluirRegistro'
 import type { Usuario } from '../types/Usuario'
 import type { Visita } from '../types/Visita'
 
 type VisitaFichaProps = {
   usuario: Usuario
   visita: Visita
+  onSessaoExpirada: () => void
 }
 
-export function VisitaFicha({ usuario, visita }: VisitaFichaProps) {
+export function VisitaFicha({
+  usuario,
+  visita,
+  onSessaoExpirada,
+}: VisitaFichaProps) {
   const clinico = usuario.perfil !== 'SECRETARIA'
 
   return (
@@ -75,6 +81,16 @@ export function VisitaFicha({ usuario, visita }: VisitaFichaProps) {
           Voltar
         </Link>
       </div>
+
+      {usuario.perfil === 'DONO' && (
+        <ExcluirRegistro
+          rotulo="Excluir visita"
+          aviso="A exclusão é definitiva. Visitas com retorno vinculado ou geradas por uma consulta não podem ser excluídas."
+          caminho={`/historico-visitas/${visita.id}`}
+          destino="/visitas"
+          onSessaoExpirada={onSessaoExpirada}
+        />
+      )}
     </>
   )
 }

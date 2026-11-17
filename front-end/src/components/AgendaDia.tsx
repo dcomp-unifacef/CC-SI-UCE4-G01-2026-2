@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { ErroApi, chamarApi, mensagemDoErro } from '../services/api'
-import { formatarHora, hoje } from '../utils/datas'
+import {
+  deslocarDia,
+  deslocarMes,
+  diaDoInstante,
+  formatarDiaCivil,
+  formatarHora,
+  hoje,
+  intervaloDaVisao,
+} from '../utils/datas'
 import { SITUACOES } from '../types/Consulta'
+import type { Visao } from '../utils/datas'
 import type { Consulta, StatusConsulta } from '../types/Consulta'
 import type { Dentista } from '../types/Dentista'
 import type { Usuario } from '../types/Usuario'
@@ -16,11 +25,19 @@ type Resposta = {
   chave: string
   consultas: Consulta[]
   erro: string
+  agora: string
+}
+
+const TITULOS = {
+  dia: 'Agenda do dia',
+  semana: 'Agenda da semana',
+  mes: 'Agenda do mês',
 }
 
 export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
   const [parametros] = useSearchParams()
   const [dia, setDia] = useState(parametros.get('dia') ?? hoje())
+  const [visao, setVisao] = useState<Visao>('dia')
 
   const [dentistas, setDentistas] = useState<Dentista[]>([])
   const [dentistaId, setDentistaId] = useState('')
@@ -34,9 +51,10 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
   const clinico = usuario.perfil !== 'SECRETARIA'
 
   const diaValido = /^\d{4}-\d{2}-\d{2}$/.test(dia) && dia >= '2000-01-01'
-  const chave = `${dia}|${dentistaId}|${tentativa}`
+  const chave = `${visao}|${dia}|${dentistaId}|${tentativa}`
   const carregando =
     diaValido && (resposta === null || resposta.chave !== chave)
+  const periodo = diaValido ? intervaloDaVisao(dia, visao) : null
 
   useEffect(() => {
     chamarApi<Dentista[]>('/dentistas')
@@ -59,8 +77,14 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
     let ativo = true
 
     const filtro = dentistaId === '' ? '' : `&dentista_id=${dentistaId}`
+    const intervalo = intervaloDaVisao(dia, visao)
 
-    chamarApi<Consulta[]>(`/consultas?dia=${dia}${filtro}`)
+    const caminho =
+      visao === 'dia' || intervalo === null
+        ? `/consultas?dia=${dia}${filtro}`
+        : `/consultas?inicio=${encodeURIComponent(intervalo.inicio)}&fim=${encodeURIComponent(intervalo.fim)}${filtro}`
+
+    chamarApi<Consulta[]>(caminho)
       .then((lista) => {
         if (ativo) {
           setResposta({
@@ -69,6 +93,7 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
               a.inicio_em.localeCompare(b.inicio_em),
             ),
             erro: '',
+            agora: new Date().toISOString(),
           })
         }
       })
@@ -89,13 +114,14 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
             e,
             'Não foi possível carregar a agenda. Tente novamente.',
           ),
+          agora: '',
         })
       })
 
     return () => {
       ativo = false
     }
-  }, [chave, dia, diaValido, dentistaId, onSessaoExpirada])
+  }, [chave, dia, visao, diaValido, dentistaId, onSessaoExpirada])
 
   async function mudarStatus(consulta: Consulta, status: StatusConsulta) {
     setAcao(consulta.id)
@@ -132,28 +158,48 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
     }
   }
 
+  function navegar(sentido: number) {
+    if (!diaValido) {
+      return
+    }
+
+    if (visao === 'mes') {
+      setDia(deslocarMes(dia, sentido))
+    }
+    else {
+      setDia(deslocarDia(dia, sentido * (visao === 'semana' ? 7 : 1)))
+    }
+  }
+
   const consultas = diaValido && resposta !== null ? resposta.consultas : []
   const erro =
     diaValido && resposta !== null && resposta.chave === chave
       ? resposta.erro
       : ''
 
+  const aguardando =
+    visao === 'dia' && dia === hoje()
+      ? consultas.filter((consulta) => consulta.status === 'AGENDADA').length
+      : 0
+
+  const agora = resposta?.agora ?? ''
+
   return (
     <>
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <h2 className="h5 mb-0">Agenda do dia</h2>
+        <h2 className="h5 mb-0">{TITULOS[visao]}</h2>
 
         {gestao && (
           <Link
             to={`/agenda/nova?dia=${diaValido ? dia : hoje()}`}
-            className="btn btn-primary btn-sm"
+            className="btn btn-primary btn-sm d-print-none"
           >
             Nova consulta
           </Link>
         )}
       </div>
 
-      <div className="row g-2 mb-3">
+      <div className="row g-2 mb-3 d-print-none">
         <div className="col-12 col-md-3">
           <label htmlFor="dia" className="form-label">
             Dia
@@ -167,7 +213,23 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
           />
         </div>
 
-        <div className="col-12 col-md-4">
+        <div className="col-6 col-md-2">
+          <label htmlFor="visao" className="form-label">
+            Visão
+          </label>
+          <select
+            id="visao"
+            className="form-select"
+            value={visao}
+            onChange={(e) => setVisao(e.target.value as Visao)}
+          >
+            <option value="dia">Dia</option>
+            <option value="semana">Semana</option>
+            <option value="mes">Mês</option>
+          </select>
+        </div>
+
+        <div className="col-6 col-md-3">
           <label htmlFor="dentista" className="form-label">
             Dentista
           </label>
@@ -185,7 +247,46 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
             ))}
           </select>
         </div>
+
+        <div className="col-12 col-md-4 d-flex align-items-end flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn btn-outline-secondary"
+            onClick={() => navegar(-1)}
+          >
+            Anterior
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-secondary"
+            onClick={() => setDia(hoje())}
+          >
+            Hoje
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-secondary"
+            onClick={() => navegar(1)}
+          >
+            Próximo
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-primary"
+            onClick={() => window.print()}
+          >
+            Imprimir
+          </button>
+        </div>
       </div>
+
+      {periodo !== null && (
+        <p className="text-secondary">
+          {periodo.de === periodo.ate
+            ? formatarDiaCivil(periodo.de)
+            : `${formatarDiaCivil(periodo.de)} a ${formatarDiaCivil(periodo.ate)}`}
+        </p>
+      )}
 
       {aviso && (
         <div className="alert alert-warning" role="alert">
@@ -215,19 +316,32 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
 
       {carregando && <p className="text-secondary">Carregando...</p>}
 
+      {!carregando && !erro && aguardando > 0 && (
+        <div className="alert alert-info d-print-none" role="status">
+          {aguardando === 1
+            ? 'Há 1 consulta de hoje aguardando confirmação.'
+            : `Há ${aguardando} consultas de hoje aguardando confirmação.`}
+        </div>
+      )}
+
       {diaValido && !carregando && !erro && consultas.length === 0 && (
-        <p className="text-secondary">Nenhuma consulta neste dia.</p>
+        <p className="text-secondary">
+          {visao === 'dia'
+            ? 'Nenhuma consulta neste dia.'
+            : 'Nenhuma consulta neste período.'}
+        </p>
       )}
 
       {diaValido && !carregando && !erro && consultas.length > 0 && (
         <table className="table table-striped table-sm align-middle">
           <thead>
             <tr>
+              {visao !== 'dia' && <th>Data</th>}
               <th>Horário</th>
               <th>Paciente</th>
               <th>Dentista</th>
               <th>Situação</th>
-              <th></th>
+              <th className="d-print-none"></th>
             </tr>
           </thead>
           <tbody>
@@ -235,9 +349,13 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
               const ativa =
                 consulta.status === 'AGENDADA' ||
                 consulta.status === 'CONFIRMADA'
+              const semAtualizacao = ativa && consulta.fim_em < agora
 
               return (
                 <tr key={consulta.id}>
+                  {visao !== 'dia' && (
+                    <td>{formatarDiaCivil(diaDoInstante(consulta.inicio_em))}</td>
+                  )}
                   <td>
                     {formatarHora(consulta.inicio_em)} –{' '}
                     {formatarHora(consulta.fim_em)}
@@ -255,8 +373,13 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
                         Encaixe
                       </span>
                     )}
+                    {semAtualizacao && (
+                      <span className="badge text-bg-dark ms-1">
+                        Situação a atualizar
+                      </span>
+                    )}
                   </td>
-                  <td>
+                  <td className="d-print-none">
                     <div className="d-flex flex-wrap gap-1 justify-content-end">
                       {consulta.status === 'AGENDADA' && (
                         <button
@@ -326,6 +449,13 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
                           Cancelar
                         </Link>
                       )}
+
+                      <Link
+                        to={`/agenda/${consulta.id}/historico`}
+                        className="btn btn-outline-secondary btn-sm"
+                      >
+                        Histórico
+                      </Link>
                     </div>
                   </td>
                 </tr>

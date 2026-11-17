@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { ErroApi, chamarApi, mensagemDoErro } from '../services/api'
-import { hoje, montarInstante } from '../utils/datas'
+import { formatarHora, hoje, montarInstante } from '../utils/datas'
 import type { Consulta } from '../types/Consulta'
 import type { Dentista } from '../types/Dentista'
 import type { Paciente } from '../types/Paciente'
@@ -28,6 +28,14 @@ export function ConsultaForm({ onSessaoExpirada }: ConsultaFormProps) {
   const [encaixe, setEncaixe] = useState(false)
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [ocupados, setOcupados] = useState<{
+    chave: string
+    consultas: Consulta[]
+    erro: string
+  } | null>(null)
+
+  const dataValida = /^\d{4}-\d{2}-\d{2}$/.test(data)
+  const chaveOcupados = `${data}|${dentistaId}`
 
   function tratar(e: unknown, padrao: string) {
     if (e instanceof ErroApi && e.status === 401) {
@@ -50,6 +58,60 @@ export function ConsultaForm({ onSessaoExpirada }: ConsultaFormProps) {
         setErro(mensagemDoErro(e, 'Não foi possível carregar os dentistas.'))
       })
   }, [onSessaoExpirada])
+
+  useEffect(() => {
+    if (dentistaId === '' || !dataValida) {
+      return
+    }
+
+    let ativo = true
+
+    chamarApi<Consulta[]>(`/consultas?dia=${data}&dentista_id=${dentistaId}`)
+      .then((lista) => {
+        if (ativo) {
+          setOcupados({
+            chave: chaveOcupados,
+            consultas: lista
+              .filter((consulta) =>
+                ['AGENDADA', 'CONFIRMADA', 'REALIZADA'].includes(consulta.status),
+              )
+              .sort((a, b) => a.inicio_em.localeCompare(b.inicio_em)),
+            erro: '',
+          })
+        }
+      })
+      .catch((e) => {
+        if (!ativo) {
+          return
+        }
+
+        if (e instanceof ErroApi && e.status === 401) {
+          onSessaoExpirada()
+          return
+        }
+
+        setOcupados({
+          chave: chaveOcupados,
+          consultas: [],
+          erro: mensagemDoErro(
+            e,
+            'Não foi possível carregar os horários ocupados.',
+          ),
+        })
+      })
+
+    return () => {
+      ativo = false
+    }
+  }, [chaveOcupados, data, dentistaId, dataValida, onSessaoExpirada])
+
+  const ocupadosAtuais =
+    dentistaId !== '' &&
+    dataValida &&
+    ocupados !== null &&
+    ocupados.chave === chaveOcupados
+      ? ocupados
+      : null
 
   async function buscar() {
     const termo = busca.trim()
@@ -258,6 +320,41 @@ export function ConsultaForm({ onSessaoExpirada }: ConsultaFormProps) {
               required
             />
           </div>
+
+          {dentistaId !== '' && dataValida && (
+            <div className="col-12">
+              <p className="form-label mb-1">
+                Horários ocupados do dentista neste dia
+              </p>
+              {ocupadosAtuais === null && (
+                <p className="text-secondary mb-0">Carregando...</p>
+              )}
+              {ocupadosAtuais !== null && ocupadosAtuais.erro && (
+                <p className="text-danger mb-0">{ocupadosAtuais.erro}</p>
+              )}
+              {ocupadosAtuais !== null &&
+                !ocupadosAtuais.erro &&
+                ocupadosAtuais.consultas.length === 0 && (
+                  <p className="text-secondary mb-0">
+                    Nenhum horário ocupado.
+                  </p>
+                )}
+              {ocupadosAtuais !== null &&
+                ocupadosAtuais.consultas.length > 0 && (
+                  <ul className="list-group">
+                    {ocupadosAtuais.consultas.map((consulta) => (
+                      <li
+                        key={consulta.id}
+                        className="list-group-item list-group-item-warning py-1"
+                      >
+                        {formatarHora(consulta.inicio_em)} –{' '}
+                        {formatarHora(consulta.fim_em)}: {consulta.paciente.nome}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+            </div>
+          )}
 
           <div className="col-12">
             <div className="form-check">

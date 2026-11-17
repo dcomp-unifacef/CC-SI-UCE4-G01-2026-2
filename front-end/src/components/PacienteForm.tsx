@@ -31,6 +31,20 @@ export function PacienteForm({ paciente, onSessaoExpirada }: PacienteFormProps) 
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
 
+  const alterado =
+    nome !== (paciente?.nome ?? '') ||
+    cpf !== '' ||
+    nascimento !== (paciente?.data_nascimento.slice(0, 10) ?? '') ||
+    telefone !== (paciente?.telefone ?? '') ||
+    email !== (paciente?.email ?? '') ||
+    logradouro !== (paciente?.logradouro ?? '') ||
+    numero !== (paciente?.numero ?? '') ||
+    complemento !== (paciente?.complemento ?? '') ||
+    bairro !== (paciente?.bairro ?? '') ||
+    municipio !== (paciente?.municipio ?? '') ||
+    uf !== (paciente?.uf ?? '') ||
+    ativo !== (paciente?.ativo ?? true)
+
   async function enviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault()
     setErro('')
@@ -263,6 +277,14 @@ export function PacienteForm({ paciente, onSessaoExpirada }: PacienteFormProps) 
         <Link
           to={edicao ? `/pacientes/${paciente.id}` : '/pacientes'}
           className="btn btn-outline-secondary"
+          onClick={(evento) => {
+            if (
+              alterado &&
+              !window.confirm('Há alterações não salvas. Sair sem salvar?')
+            ) {
+              evento.preventDefault()
+            }
+          }}
         >
           Voltar
         </Link>

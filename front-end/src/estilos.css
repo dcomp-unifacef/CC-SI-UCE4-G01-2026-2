@@ -1,0 +1,20 @@
+html {
+  font-size: 112.5%;
+}
+
+.btn-sm {
+  --bs-btn-padding-y: 0.4rem;
+  --bs-btn-padding-x: 0.75rem;
+  --bs-btn-font-size: 1rem;
+}
+
+.table-sm > :not(caption) > * > * {
+  padding: 0.4rem 0.4rem;
+}
+
+@media (max-width: 767.98px) {
+  main table {
+    display: block;
+    overflow-x: auto;
+  }
+}

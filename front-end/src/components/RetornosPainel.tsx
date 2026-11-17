@@ -35,6 +35,7 @@ export function RetornosPainel({ usuario, onSessaoExpirada }: RetornosPainelProp
   const [tentativa, setTentativa] = useState(0)
   const [resposta, setResposta] = useState<Resposta | null>(null)
   const [paciente, setPaciente] = useState<Paciente | null>(null)
+  const [ordem, setOrdem] = useState('maior')
 
   const chave = `${meses}|${tentativa}`
   const carregando = resposta === null || resposta.chave !== chave
@@ -73,14 +74,18 @@ export function RetornosPainel({ usuario, onSessaoExpirada }: RetornosPainelProp
     }
   }, [chave, meses, onSessaoExpirada])
 
-  const atrasos = carregando ? [] : resposta.atrasos
+  const atrasos = carregando
+    ? []
+    : [...resposta.atrasos].sort((a, b) =>
+        ordem === 'maior' ? b.dias_desde - a.dias_desde : a.dias_desde - b.dias_desde,
+      )
   const erro = carregando ? '' : resposta.erro
 
   return (
     <>
       <h2 className="h5 mb-3">Retornos e contatos</h2>
 
-      <div className="mb-4">
+      <div className="mb-4 d-print-none">
         <h3 className="h6">Consultar por paciente</h3>
 
         <PacienteBusca
@@ -103,7 +108,7 @@ export function RetornosPainel({ usuario, onSessaoExpirada }: RetornosPainelProp
 
       <h3 className="h6">Pacientes em atraso</h3>
 
-      <div className="row g-2 mb-3">
+      <div className="row g-2 mb-3 d-print-none">
         <div className="col-12 col-md-3">
           <label htmlFor="meses" className="form-label">
             Última visita há mais de
@@ -118,6 +123,31 @@ export function RetornosPainel({ usuario, onSessaoExpirada }: RetornosPainelProp
             <option value="9">9 meses</option>
             <option value="12">12 meses</option>
           </select>
+        </div>
+
+        <div className="col-12 col-md-3">
+          <label htmlFor="ordem" className="form-label">
+            Ordenar por tempo de ausência
+          </label>
+          <select
+            id="ordem"
+            className="form-select"
+            value={ordem}
+            onChange={(e) => setOrdem(e.target.value)}
+          >
+            <option value="maior">Maior tempo primeiro</option>
+            <option value="menor">Menor tempo primeiro</option>
+          </select>
+        </div>
+
+        <div className="col-12 col-md-3 d-flex align-items-end">
+          <button
+            type="button"
+            className="btn btn-outline-primary"
+            onClick={() => window.print()}
+          >
+            Imprimir lista
+          </button>
         </div>
       </div>
 
@@ -151,7 +181,7 @@ export function RetornosPainel({ usuario, onSessaoExpirada }: RetornosPainelProp
               <th>Última visita</th>
               <th>Tempo</th>
               <th>Retorno</th>
-              <th></th>
+              <th className="d-print-none"></th>
             </tr>
           </thead>
           <tbody>
@@ -171,7 +201,7 @@ export function RetornosPainel({ usuario, onSessaoExpirada }: RetornosPainelProp
                 </td>
                 <td>{atraso.meses_desde} meses</td>
                 <td>{descreverRetorno(atraso)}</td>
-                <td>
+                <td className="d-print-none">
                   <div className="d-flex flex-wrap gap-1 justify-content-end">
                     <Link
                       to={`/retornos/paciente/${atraso.paciente.id}`}
