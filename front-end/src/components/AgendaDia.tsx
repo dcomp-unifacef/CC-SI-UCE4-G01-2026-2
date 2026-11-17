@@ -288,7 +288,7 @@ export function AgendaDia({ usuario, onSessaoExpirada }: AgendaDiaProps) {
         </p>
       )}
 
-      {aviso && (
+      {aviso && aviso !== erro && (
         <div className="alert alert-warning" role="alert">
           {aviso}
         </div>
